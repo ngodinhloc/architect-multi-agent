@@ -1,10 +1,14 @@
 # Architect Agent
 
-An AI-powered software architect. Describe a requirement — _"implement an SFTP solution"_ — and a team of specialised agents collaborates to produce a solution architecture and development tickets. Review the plan, refine it with follow-ups, or accept it to persist the epic and tickets.
+A **multi-agent AI** system for software architecture planning. Describe a requirement — _"implement an SFTP solution"_ — and a pipeline of specialised AI agents collaborates to produce a solution architecture and development tickets. An approval-loop graph designs and reviews the plan; a separate tool-calling agent persists it as an epic and tickets via MCP. Review the plan, refine it with follow-ups, or accept it to trigger ticket creation.
 
-![screenshot](screenshot.png)
+![screenshot 1](screenshot_1.png)
 
-![logs](screenshot_logs.png)
+![screenshot 2](screenshot_2.png)
+
+![screenshot 3](screenshot_3.png)
+
+![screenshot 4](screenshot_4.png)
 
 ---
 
@@ -152,6 +156,8 @@ Proxies the browser to the internal ticket-service (not directly reachable from 
 
 ## Architect Agent (port 8001)
 
+![Architect Agent graph](architect_agent_graph.png)
+
 Consumes `ChatEvent` messages from the `architecture-agent.chat` RabbitMQ queue and runs a **LangGraph** state graph. Each node is a Python class with injected dependencies — a shared `ChatAnthropic` LLM instance and a `RabbitMQPublisher` — wired together in the application container.
 
 ### Node responsibilities
@@ -225,6 +231,8 @@ class ArchitectState(MessagesState):
 ---
 
 ## Ticket Agent (port 8004)
+
+![Ticket Agent graph](ticket_agent_graph.png)
 
 Subscribes to the `architecture-agent.accept` RabbitMQ queue. When an `AcceptEvent` arrives it runs a **LangGraph `StateGraph`** with two nodes: `create_node` (tool-calling loop) and `extract_node` (structured output extraction).
 

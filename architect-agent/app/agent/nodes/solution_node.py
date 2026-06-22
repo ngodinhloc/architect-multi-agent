@@ -1,6 +1,7 @@
 import json
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
+
 from app.agent.contracts.agent_interface import ArchitectState
 from app.agent.schemas.solution_schema import SolutionOut
 from app.agent.templates.solution_templates import SOLUTION_PERSONA, SOLUTION_PROMPT_NEW, SOLUTION_PROMPT_REFINE, SOLUTION_PROMPT_REVISE

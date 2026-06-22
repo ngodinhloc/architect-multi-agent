@@ -1,6 +1,6 @@
-# Multi-Agent Pipelines: Building an Approval-Loop Architect with LangGraph
+# Approval-Loop Architecture: Building Reliable Multi-Agent Systems with LangGraph
 
-This article walks through the design and implementation of a full-stack multi-agent application. A user types a software requirement — "implement an SFTP export solution" — and two independent agents collaborate: the **architect-agent** produces a solution architecture and development tickets through a directed approval-loop graph, and the **ticket-agent** — a separate two-node `StateGraph` — receives the accepted plan over RabbitMQ and persists it via LLM-driven tool calling followed by structured output extraction. Two embedded reviewer nodes run approval loops, each sending feedback back to the generator if the output is not good enough. Once both loops pass, the user sees the final plan. They can refine it with a follow-up, or accept it to trigger the ticket-agent.
+This article walks through the design and implementation of a **multi-agent AI** system for software architecture planning. A user types a requirement — "implement an SFTP export solution" — and a pipeline of specialised AI agents collaborates to deliver a solution: the **architect-agent** produces a solution architecture and development tickets through a directed approval-loop graph, and the **ticket-agent** — a separate two-node `StateGraph` — receives the accepted plan over RabbitMQ and persists it via LLM-driven tool calling followed by structured output extraction. Two embedded reviewer agents run approval loops, each sending feedback back to the generator if the output is not good enough. Once both loops pass, the user sees the final plan. They can refine it with a follow-up, or accept it to trigger the ticket-agent.
 
 The focus is on the decisions that make this work in practice:
 - How to design a directed graph with conditional approval loops
@@ -10,11 +10,13 @@ The focus is on the decisions that make this work in practice:
 - How to build a two-node ticket agent with a tool-calling loop and a structured extraction step
 - How to stream per-node progress to the browser in real time
 
-![Screenshot of the running application](./screenshot.png)
+![Screenshot 1](./screenshot_1.png)
 
-![Agent thinking log](./screenshot_logs.png)
+![Screenshot 2](./screenshot_2.png)
 
-*The thinking log streams live as each agent node completes. Review results show the approval status and any comments inline.*
+![Screenshot 3](./screenshot_3.png)
+
+![Screenshot 4](./screenshot_4.png)
 
 ---
 
@@ -41,6 +43,8 @@ The focus is on the decisions that make this work in practice:
 ## Step 1 — Design a Multi-Agent Approval Loop Graph
 
 A ReAct agent (like the tourguide-agent) uses a single LLM instance deciding which tools to call in an open-ended loop. This project uses a different pattern: a **directed graph of specialised agents**, each with a narrow role, connected by explicit conditional edges.
+
+![Architect Agent graph](./architect_agent_graph.png)
 
 The graph has two approval loops:
 
@@ -325,6 +329,8 @@ Without this, a strict reviewer and an imperfect generator can loop indefinitely
 ## Step 7 — Ticket Agent: A Two-Node StateGraph
 
 The ticket-agent is an independent service with its own LLM, RabbitMQ consumer, and `StateGraph`. Unlike `create_react_agent` — which uses an open-ended loop with no structured output step — this graph separates concerns into two explicit nodes: one that calls tools and one that extracts a typed result.
+
+![Ticket Agent graph](./ticket_agent_graph.png)
 
 ### Graph structure
 
