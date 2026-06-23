@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import HTTPException
-from app.events.contracts.chat_interface import (
+from app.contracts.chat_interface import (
     ChatInterface, MessageInterface, ChatActor, AgentStatus,
     ReplyInterface, FinalReplyInterface,
 )

@@ -1,8 +1,7 @@
-import json
 import logging
 from app.services.chat_service import ChatService
-from app.events.contracts.chat_interface import ChatEvent, HistoryMessage
-from app.events.contracts.consumer_message import ConsumerMessage
+from app.contracts.chat_interface import ChatRequest
+from app.events.contracts.event_interface import ChatEvent
 
 
 class ChatEventHandler:
@@ -10,20 +9,18 @@ class ChatEventHandler:
         self._chat_service = chat_service
         self._logger = logger
 
-    async def handle(self, message: ConsumerMessage) -> None:
-        try:
-            payload = json.loads(message.body)
-            event = ChatEvent(
-                conversationId=payload["conversationId"],
-                message=payload["message"],
-                history=[HistoryMessage(**m) for m in payload.get("history", [])],
-            )
-            self._logger.info(
-                "Received event conversationId=%s message=%s history_length=%d",
-                event.conversationId,
-                event.message,
-                len(event.history),
-            )
-            await self._chat_service.handle(event)
-        except Exception:
-            self._logger.exception("Failed to process message: %s", message.body)
+    async def handle(self, event: ChatEvent) -> None:
+        self._logger.info(
+            "Received event correlationId=%s conversationId=%s message=%s history_length=%d",
+            event.correlationId,
+            event.data.conversationId,
+            event.data.message,
+            len(event.data.history),
+        )
+        request = ChatRequest(
+            correlationId=event.correlationId,
+            conversationId=event.data.conversationId,
+            message=event.data.message,
+            history=event.data.history,
+        )
+        await self._chat_service.execute(request)

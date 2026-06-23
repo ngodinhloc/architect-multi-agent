@@ -1,27 +1,29 @@
 import json
 import logging
 from langchain_core.messages import HumanMessage
-from app.events.contracts.chat_interface import (
-    ChatEvent, ReplyInterface, FinalReplyInterface,
+from langgraph.graph.state import CompiledStateGraph
+from app.contracts.chat_interface import (
+    ChatRequest, ReplyInterface, FinalReplyInterface,
 )
 from app.services.chat_manager import ChatManager
 from app.services.redis_helper import RedisHelper
 
 
 class ChatService:
-    def __init__(self, agent_graph, chat_manager: ChatManager, logger: logging.Logger):
+    def __init__(self, agent_graph: CompiledStateGraph, chat_manager: ChatManager, logger: logging.Logger):
         self._graph = agent_graph
         self._logger = logger
         self._message_manager = chat_manager
 
-    async def handle(self, request: ChatEvent) -> None:
+    async def execute(self, request: ChatRequest) -> None:
         key = RedisHelper.chat_key(request.conversationId)
         chat_obj = await self._message_manager.load_chat(key, request.conversationId)
 
         raw_history = [m.model_dump() for m in request.history]
 
         self._logger.info(
-            "Starting graph | conversation=%s | message=%r | history=%s",
+            "Starting graph | correlationId=%s | conversation=%s | message=%r | history=%s",
+            request.correlationId,
             request.conversationId,
             request.message,
             json.dumps(raw_history, default=str),

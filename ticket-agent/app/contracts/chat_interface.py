@@ -37,3 +37,9 @@ class ChatInterface(BaseModel):
     messages: list[MessageInterface] = []
     status: ChatStatus
     agentStatus: Optional[AgentStatus] = None
+
+
+class TicketRequest(BaseModel):
+    correlationId: str
+    conversationId: str
+    content: dict

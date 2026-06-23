@@ -1,8 +1,11 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as amqp from 'amqplib';
-import type { ChatEvent } from '../contracts/chat-event.interface';
+import type { ChatEventInterface } from '../contracts/chat-event.interface';
+import { CHAT_EVENT_NAME } from '../contracts/chat-event.interface';
 
+const EXCHANGE = 'architect-events';
 const QUEUE = 'architecture-agent.chat';
+const ROUTING_KEY = CHAT_EVENT_NAME;
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
@@ -20,8 +23,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     try {
       this.connection = await amqp.connect(url);
       this.channel = await this.connection.createChannel();
+      await this.channel.assertExchange(EXCHANGE, 'topic', { durable: true });
       await this.channel.assertQueue(QUEUE, { durable: true });
-      this.logger.log(`Connected to RabbitMQ, queue: ${QUEUE}`);
+      await this.channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+      this.logger.log(`Connected to RabbitMQ, exchange: ${EXCHANGE}, queue: ${QUEUE}`);
     } catch (err) {
       if (attempt >= maxAttempts) throw err;
       const delay = Math.min(1000 * attempt, 10000);
@@ -36,11 +41,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     await this.connection?.close();
   }
 
-  publish(event: ChatEvent): void {
+  publish(event: ChatEventInterface): void {
     if (!this.channel) {
       this.logger.error('RabbitMQ channel not ready');
       return;
     }
-    this.channel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(event)), { persistent: true });
+    this.channel.publish(EXCHANGE, ROUTING_KEY, Buffer.from(JSON.stringify(event)), { persistent: true });
   }
 }

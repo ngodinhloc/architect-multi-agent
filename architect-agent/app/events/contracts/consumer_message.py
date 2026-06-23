@@ -1,5 +1,5 @@
 from typing import Protocol
 
 
-class ConsumerMessage(Protocol):
+class RabbitMqMessage(Protocol):
     body: bytes

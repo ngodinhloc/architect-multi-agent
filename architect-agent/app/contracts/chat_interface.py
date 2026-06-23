@@ -87,7 +87,8 @@ class HistoryMessage(BaseModel):
     agentStatus: Optional[str] = None
 
 
-class ChatEvent(BaseModel):
+class ChatRequest(BaseModel):
+    correlationId: str
     conversationId: str
     message: str
     history: list[HistoryMessage] = []

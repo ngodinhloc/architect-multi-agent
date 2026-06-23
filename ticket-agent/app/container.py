@@ -5,8 +5,10 @@ from app.agent.ticket_graph import TicketGraph
 from app.agent.tools.mcp_client import McpClient
 from app.agent.tools.create_epic_tool import make_create_epic_tool
 from app.agent.tools.create_ticket_tool import make_create_ticket_tool
+from app.configs.event_configs import EventHandlerMap, ACCEPT_EVENT_NAME
 from app.configs.settings import settings
 from app.events.handlers.accept_event_handler import AcceptEventHandler
+from app.events.message_processor import MessageProcessor
 from app.events.rabbitmq_consumer import RabbitMQConsumer
 from app.services.chat_manager import ChatManager
 from app.services.redis_client import RedisClient
@@ -58,10 +60,23 @@ class Container:
         )
 
     @cached_property
+    def event_handler_map(self) -> EventHandlerMap:
+        return {
+            ACCEPT_EVENT_NAME: self.accept_event_handler,
+        }
+
+    @cached_property
+    def message_processor(self) -> MessageProcessor:
+        return MessageProcessor(
+            handler_map=self.event_handler_map,
+            logger=self.logger("message_processor"),
+        )
+
+    @cached_property
     def rabbitmq_consumer(self) -> RabbitMQConsumer:
         return RabbitMQConsumer(
             rabbitmq_url=settings.rabbitmq_url,
-            event_handler=self.accept_event_handler,
+            message_processor=self.message_processor,
             logger=self.logger("rabbitmq_consumer"),
         )
 

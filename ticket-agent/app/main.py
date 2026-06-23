@@ -4,6 +4,7 @@ import time
 from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from aiormq.exceptions import ConnectionClosed
 from app.configs.settings import settings
 from app.container import container
 from app.routers import health_router
@@ -17,7 +18,7 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(container.rabbitmq_consumer.start())
     yield
     task.cancel()
-    with suppress(asyncio.CancelledError):
+    with suppress(asyncio.CancelledError, ConnectionClosed):
         await task
 
 

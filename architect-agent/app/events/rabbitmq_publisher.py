@@ -1,27 +1,30 @@
 import json
 import logging
 import aio_pika
-
-logger = logging.getLogger(__name__)
+from app.configs.event_configs import EXCHANGE_NAME
 
 
 class RabbitMQPublisher:
-    def __init__(self, rabbitmq_url: str):
+    def __init__(self, rabbitmq_url: str, logger: logging.Logger):
         self._url = rabbitmq_url
+        self._logger = logger
         self._connection: aio_pika.abc.AbstractRobustConnection | None = None
         self._channel: aio_pika.abc.AbstractChannel | None = None
+        self._exchange: aio_pika.abc.AbstractExchange | None = None
 
-    async def publish(self, queue: str, payload: dict) -> None:
+    async def publish(self, routing_key: str, payload: dict) -> None:
         if self._connection is None or self._connection.is_closed:
             self._connection = await aio_pika.connect_robust(self._url)
             self._channel = await self._connection.channel()
+            self._exchange = await self._channel.declare_exchange(
+                EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
+            )
 
-        await self._channel.declare_queue(queue, durable=True)
-        await self._channel.default_exchange.publish(
+        await self._exchange.publish(
             aio_pika.Message(
                 body=json.dumps(payload, default=str).encode(),
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             ),
-            routing_key=queue,
+            routing_key=routing_key,
         )
-        logger.info("Published to queue=%s conversationId=%s", queue, payload.get("conversationId"))
+        self._logger.info("Published to exchange=%s routing_key=%s", EXCHANGE_NAME, routing_key)

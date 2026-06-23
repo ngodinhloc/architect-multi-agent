@@ -1,3 +1,4 @@
+import uuid
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -7,6 +8,7 @@ from app.agent.templates.intent_templates import INTENT_PERSONA, INTENT_PROMPT
 from app.events.rabbitmq_publisher import RabbitMQPublisher
 
 ACCEPT_QUEUE = "architecture-agent.accept"
+ACCEPT_EVENT_NAME = "architecture-agent.accept"
 
 
 class IntentNode:
@@ -38,9 +40,14 @@ class IntentNode:
         for msg in reversed(state.get("raw_history", [])):
             content = msg.get("content", {})
             if isinstance(content, dict) and "epic" in content and "tickets" in content:
-                await self._publisher.publish(ACCEPT_QUEUE, {
-                    "conversationId": conversation_id,
-                    "content": content,
+                await self._publisher.publish(ACCEPT_EVENT_NAME, {
+                    "eventName": ACCEPT_EVENT_NAME,
+                    "correlationId": str(uuid.uuid4()),
+                    "meta": {"publisher": "architect-agent"},
+                    "data": {
+                        "conversationId": conversation_id,
+                        "content": content,
+                    },
                 })
                 break
 
