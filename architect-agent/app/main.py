@@ -12,6 +12,12 @@ from app.routers import health_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("http")
 
+class _HealthFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/api/health" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,8 +43,9 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
-    ms = int((time.time() - start) * 1000)
-    logger.info("%s %s %s %dms", request.method, request.url.path, response.status_code, ms)
+    if request.url.path != "/api/health":
+        ms = int((time.time() - start) * 1000)
+        logger.info("%s %s %s %dms", request.method, request.url.path, response.status_code, ms)
     return response
 
 

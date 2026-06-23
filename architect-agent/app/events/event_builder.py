@@ -1,4 +1,4 @@
-from app.contracts.chat_interface import HistoryMessage
+from app.contracts.chat_interface import MessageInterface
 from app.events.contracts.event_interface import ChatEvent, ChatEventMeta, ChatEventData
 
 
@@ -13,6 +13,6 @@ class EventBuilder:
             data=ChatEventData(
                 conversationId=data["conversationId"],
                 message=data["message"],
-                history=[HistoryMessage(**m) for m in data.get("history", [])],
+                history=[MessageInterface(**m) for m in data.get("history", [])],
             ),
         )

@@ -12,12 +12,12 @@ class PlanReviewNode:
         self._llm = llm.with_structured_output(PlanReviewOut)
 
     async def __call__(self, state: ArchitectState) -> dict:
-        solution = state.get("solution", {})
+        solution = state.get("solution")
         tickets = state.get("tickets", [])
 
         prompt = PLAN_REVIEW_PROMPT.format(
-            solution=json.dumps(solution, indent=2),
-            tickets=json.dumps(tickets, indent=2),
+            solution=json.dumps(solution.model_dump() if solution else {}, indent=2),
+            tickets=json.dumps([t.model_dump() for t in tickets], indent=2),
         )
         result: PlanReviewOut = await self._llm.ainvoke([SystemMessage(content=PLAN_REVIEW_PERSONA), HumanMessage(content=prompt)])
 

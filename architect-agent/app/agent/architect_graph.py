@@ -1,6 +1,7 @@
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph import StateGraph, START, END
 from app.agent.contracts.agent_interface import ArchitectState
+from app.contracts.chat_interface import UserIntent, NodeName
 from app.agent.nodes.intent_node import IntentNode
 from app.agent.nodes.solution_node import SolutionNode
 from app.agent.nodes.solution_review_node import SolutionReviewNode
@@ -50,42 +51,42 @@ class ArchitectGraph:
     def build(self):
         graph = StateGraph(ArchitectState)
 
-        graph.add_node("intent_node", IntentNode(self._llm, self._publisher))
-        graph.add_node("solution_node", SolutionNode(self._llm))
-        graph.add_node("solution_review_node", SolutionReviewNode(self._llm))
-        graph.add_node("plan_node", PlanNode(self._llm))
-        graph.add_node("plan_review_node", PlanReviewNode(self._llm))
-        graph.add_node("reply_node", ReplyNode())
+        graph.add_node(NodeName.intent, IntentNode(self._llm, self._publisher))
+        graph.add_node(NodeName.solution, SolutionNode(self._llm))
+        graph.add_node(NodeName.solution_review, SolutionReviewNode(self._llm))
+        graph.add_node(NodeName.plan, PlanNode(self._llm))
+        graph.add_node(NodeName.plan_review, PlanReviewNode(self._llm))
+        graph.add_node(NodeName.reply, ReplyNode())
 
-        graph.add_edge(START, "intent_node")
+        graph.add_edge(START, NodeName.intent)
 
         graph.add_conditional_edges(
-            "intent_node",
+            NodeName.intent,
             self._route_intent,
-            {"accept": END, "plan": "solution_node", "refine": "solution_node"},
+            {"accept": END, "plan": NodeName.solution, "refine": NodeName.solution},
         )
 
-        graph.add_edge("solution_node", "solution_review_node")
+        graph.add_edge(NodeName.solution, NodeName.solution_review)
         graph.add_conditional_edges(
-            "solution_review_node",
+            NodeName.solution_review,
             self._route_solution_review,
-            {"approved": "plan_node", "rejected": "solution_node"},
+            {"approved": NodeName.plan, "rejected": NodeName.solution},
         )
 
-        graph.add_edge("plan_node", "plan_review_node")
+        graph.add_edge(NodeName.plan, NodeName.plan_review)
         graph.add_conditional_edges(
-            "plan_review_node",
+            NodeName.plan_review,
             self._route_plan_review,
-            {"approved": "reply_node", "rejected": "plan_node"},
+            {"approved": NodeName.reply, "rejected": NodeName.plan},
         )
 
-        graph.add_edge("reply_node", END)
+        graph.add_edge(NodeName.reply, END)
 
         return graph.compile()
 
     @staticmethod
     def _route_intent(state: ArchitectState) -> str:
-        return state.get("user_intent", "plan")
+        return state.get("user_intent", UserIntent.plan)
 
     @staticmethod
     def _route_solution_review(state: ArchitectState) -> str:

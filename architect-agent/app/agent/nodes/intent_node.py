@@ -3,6 +3,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.agent.contracts.agent_interface import ArchitectState
+from app.contracts.chat_interface import NodeName, ReplyInterface, UserIntent
 from app.agent.schemas.intent_schema import IntentOut
 from app.agent.templates.intent_templates import INTENT_PERSONA, INTENT_PROMPT
 from app.events.rabbitmq_publisher import RabbitMQPublisher
@@ -22,14 +23,14 @@ class IntentNode:
         user_text = latest.content if latest else ""
 
         has_prior_plan = any(
-            m.get("agentStatus") == "hasReplied" and isinstance(m.get("content"), dict)
+            m.node == NodeName.reply
             for m in state.get("raw_history", [])
         )
 
         prompt = INTENT_PROMPT.format(user_text=user_text, has_prior_plan=has_prior_plan)
         result: IntentOut = await self._llm.ainvoke([SystemMessage(content=INTENT_PERSONA), HumanMessage(content=prompt)])
 
-        if result.intent == "accept":
+        if result.intent == UserIntent.accept:
             return await self._handle_accept(state)
 
         return self._build_updates(state, result)
@@ -38,29 +39,27 @@ class IntentNode:
         conversation_id = state.get("conversation_id", "")
 
         for msg in reversed(state.get("raw_history", [])):
-            content = msg.get("content", {})
-            if isinstance(content, dict) and "epic" in content and "tickets" in content:
+            if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
                 await self._publisher.publish(ACCEPT_EVENT_NAME, {
                     "eventName": ACCEPT_EVENT_NAME,
                     "correlationId": str(uuid.uuid4()),
                     "meta": {"publisher": "architect-agent"},
                     "data": {
                         "conversationId": conversation_id,
-                        "content": content,
+                        "content": msg.content.model_dump(),
                     },
                 })
                 break
 
-        return {"user_intent": "accept"}
+        return {"user_intent": UserIntent.accept}
 
     def _build_updates(self, state: ArchitectState, result: IntentOut) -> dict:
-        updates: dict = {"user_intent": result.intent}
+        updates: dict = {"user_intent": UserIntent(result.intent)}
 
-        if result.intent == "refine":
+        if result.intent == UserIntent.refine:
             for msg in reversed(state.get("raw_history", [])):
-                content = msg.get("content", {})
-                if isinstance(content, dict) and "epic" in content and "tickets" in content:
-                    updates["prior_solution"] = content["epic"].get("solution")
+                if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
+                    updates["prior_solution"] = msg.content.epic.solution
                     break
 
         return updates

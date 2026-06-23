@@ -9,6 +9,12 @@ from app.routers import health_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("http")
 
+class _HealthFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/api/health" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
+
 _mcp_app = fast_mcp.http_app(path="/")
 app = FastAPI(title="Architect MCP Server", lifespan=_mcp_app.lifespan)
 
@@ -23,12 +29,12 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    if request.url.path == "/api/health":
+        return await call_next(request)
     start = time.time()
     if request.method == "POST":
         body = await request.body()
         logger.info("MCP %s %s", request.method, body.decode())
-    else:
-        logger.info("%s %s", request.method, request.url.path)
     response = await call_next(request)
     ms = int((time.time() - start) * 1000)
     logger.info("%s %s %s %dms", request.method, request.url.path, response.status_code, ms)

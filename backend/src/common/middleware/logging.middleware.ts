@@ -10,6 +10,7 @@ export class LoggingMiddleware implements NestMiddleware {
     const start = Date.now();
 
     res.on('finish', () => {
+      if (originalUrl === '/api/health') return;
       const ms = Date.now() - start;
       this.logger.log(`${method} ${originalUrl} ${res.statusCode} ${ms}ms`);
     });

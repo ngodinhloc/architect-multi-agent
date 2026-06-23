@@ -13,9 +13,9 @@ class SolutionReviewNode:
 
     async def __call__(self, state: ArchitectState) -> dict:
         requirement = state.get("requirement", "")
-        solution = state.get("solution", {})
+        solution = state.get("solution")
 
-        prompt = SOLUTION_REVIEW_PROMPT.format(requirement=requirement, solution=json.dumps(solution, indent=2))
+        prompt = SOLUTION_REVIEW_PROMPT.format(requirement=requirement, solution=json.dumps(solution.model_dump() if solution else {}, indent=2))
         result: SolutionReviewOut = await self._llm.ainvoke([SystemMessage(content=SOLUTION_REVIEW_PERSONA), HumanMessage(content=prompt)])
 
         return {

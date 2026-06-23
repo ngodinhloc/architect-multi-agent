@@ -3,7 +3,7 @@ import logging
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from app.contracts.chat_interface import (
-    ChatRequest, ReplyInterface, FinalReplyInterface,
+    ChatRequest, ReplyInterface, FinalReplyInterface, UserIntent, NodeName,
 )
 from app.services.chat_manager import ChatManager
 from app.services.redis_helper import RedisHelper
@@ -19,14 +19,14 @@ class ChatService:
         key = RedisHelper.chat_key(request.conversationId)
         chat_obj = await self._message_manager.load_chat(key, request.conversationId)
 
-        raw_history = [m.model_dump() for m in request.history]
+        raw_history = request.history
 
         self._logger.info(
             "Starting graph | correlationId=%s | conversation=%s | message=%r | history=%s",
             request.correlationId,
             request.conversationId,
             request.message,
-            json.dumps(raw_history, default=str),
+            json.dumps([m.model_dump() for m in raw_history], default=str),
         )
 
         initial_state = {
@@ -37,7 +37,7 @@ class ChatService:
         }
 
         final_reply = None
-        user_intent: str | None = None
+        user_intent: UserIntent | None = None
         error: str | None = None
 
         try:
@@ -48,7 +48,7 @@ class ChatService:
                         node_name,
                         json.dumps(node_output, default=str),
                     )
-                    if node_name == "intent_node":
+                    if node_name == NodeName.intent:
                         user_intent = node_output.get("user_intent")
                     self._message_manager.append_thinking_message(chat_obj, node_name, node_output)
                     await self._message_manager.save_chat(key, chat_obj)
@@ -60,16 +60,18 @@ class ChatService:
             self._logger.exception("Graph error for conversation %s", request.conversationId)
 
         # On accept, ticket-agent will publish the final reply and set hasReplied in Redis
-        if user_intent == "accept" and not error:
+        if user_intent == UserIntent.accept and not error:
             return
 
         parsed_reply = self._parse_reply(final_reply)
         await self._message_manager.append_reply_message(key, chat_obj, error, parsed_reply)
 
     @staticmethod
-    def _parse_reply(raw: dict | None) -> ReplyInterface | FinalReplyInterface | None:
+    def _parse_reply(raw: ReplyInterface | dict | None) -> ReplyInterface | FinalReplyInterface | None:
         if raw is None:
             return None
+        if isinstance(raw, (ReplyInterface, FinalReplyInterface)):
+            return raw
         if "epicId" in raw:
             return FinalReplyInterface(**raw)
         if "epic" in raw and "tickets" in raw:

@@ -4,6 +4,21 @@ from typing import Optional, Union
 from pydantic import BaseModel
 
 
+class UserIntent(str, Enum):
+    plan = "plan"
+    accept = "accept"
+    refine = "refine"
+
+
+class NodeName(str, Enum):
+    intent = "intent_node"
+    solution = "solution_node"
+    solution_review = "solution_review_node"
+    plan = "plan_node"
+    plan_review = "plan_review_node"
+    reply = "reply_node"
+
+
 class ChatStatus(str, Enum):
     is_active = "isActive"
     is_stopped = "isStopped"
@@ -68,9 +83,10 @@ class FinalReplyInterface(BaseModel):
 
 class MessageInterface(BaseModel):
     actor: ChatActor
-    timestamp: datetime
     content: Union[str, ReplyInterface, FinalReplyInterface]
     agentStatus: Optional[AgentStatus] = None
+    timestamp: Optional[datetime] = None
+    node: Optional[NodeName] = None
 
 
 class ChatInterface(BaseModel):
@@ -81,14 +97,8 @@ class ChatInterface(BaseModel):
     agentStatus: Optional[AgentStatus] = None
 
 
-class HistoryMessage(BaseModel):
-    actor: str
-    content: Union[str, dict]
-    agentStatus: Optional[str] = None
-
-
 class ChatRequest(BaseModel):
     correlationId: str
     conversationId: str
     message: str
-    history: list[HistoryMessage] = []
+    history: list[MessageInterface] = []
