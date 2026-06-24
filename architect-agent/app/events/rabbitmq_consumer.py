@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import aio_pika
 from app.configs.event_configs import EXCHANGE_NAME, CHAT_EVENT_NAME, CHAT_QUEUE
@@ -11,6 +12,16 @@ class RabbitMQConsumer:
         self._logger = logger
 
     async def start(self) -> None:
+        while True:
+            try:
+                await self._run()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self._logger.error("RabbitMQ consumer error: %s — retrying in 5s", e)
+                await asyncio.sleep(5)
+
+    async def _run(self) -> None:
         connection = await aio_pika.connect_robust(self._url)
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)

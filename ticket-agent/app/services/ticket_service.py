@@ -1,13 +1,14 @@
 import logging
 import json
 from langchain_core.messages import HumanMessage
+from app.agent.ticket_graph import TicketGraph
 from app.contracts.chat_interface import TicketRequest, FinalReplyInterface
 from app.services.chat_manager import ChatManager
 from app.services.redis_helper import RedisHelper
 
 
 class TicketService:
-    def __init__(self, ticket_graph, chat_manager: ChatManager, logger: logging.Logger):
+    def __init__(self, ticket_graph: TicketGraph, chat_manager: ChatManager, logger: logging.Logger):
         self._graph = ticket_graph
         self._chat_manager = chat_manager
         self._logger = logger
@@ -23,7 +24,8 @@ class TicketService:
         error: str | None = None
 
         try:
-            async for state in self._graph.astream(initial_state, stream_mode="values"):
+            graph = await self._graph.build()
+            async for state in graph.astream(initial_state, stream_mode="values"):
                 final_state = state
                 last = state["messages"][-1]
                 self._logger.info(

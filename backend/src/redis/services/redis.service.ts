@@ -1,6 +1,8 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 
+export const CHAT_TTL_SECONDS = 7200;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -24,8 +26,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return JSON.parse(raw) as T;
   }
 
-  async setJson(key: string, value: unknown): Promise<void> {
-    await this.client.set(key, JSON.stringify(value));
+  async setJson(key: string, value: unknown, ttlSeconds = CHAT_TTL_SECONDS): Promise<void> {
+    await this.client.set(key, JSON.stringify(value), 'EX', ttlSeconds);
   }
 
   async del(key: string): Promise<void> {

@@ -93,10 +93,15 @@ services:
     environment:
       CORS_ORIGINS: "http://localhost:3000,http://architect-agent:8000"
       TICKET_SERVICE_URL: "http://ticket-service:8000"
+      REDIS_URL: "redis://redis:6379"
+      PROVIDER_NAME: "Ticket MCP Server"
+      PROVIDER_HOST: "http://mcp-server:8000"
     volumes:
       - ./mcp-server:/app
     depends_on:
       ticket-service:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]

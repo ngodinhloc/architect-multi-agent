@@ -3,8 +3,7 @@ from functools import cached_property
 from langchain_anthropic import ChatAnthropic
 from app.agent.ticket_graph import TicketGraph
 from app.agent.tools.mcp_client import McpClient
-from app.agent.tools.create_epic_tool import make_create_epic_tool
-from app.agent.tools.create_ticket_tool import make_create_ticket_tool
+from app.agent.tools.mcp_tool_builder import McpToolBuilder
 from app.configs.event_configs import EventHandlerMap, ACCEPT_EVENT_NAME
 from app.configs.settings import settings
 from app.events.handlers.accept_event_handler import AcceptEventHandler
@@ -28,17 +27,19 @@ class Container:
         )
 
     @cached_property
-    def mcp_client(self) -> McpClient:
-        return McpClient(settings.mcp_server_url)
-
-    @cached_property
-    def ticket_graph(self):
-        tools = [make_create_epic_tool(self.mcp_client), make_create_ticket_tool(self.mcp_client)]
-        return TicketGraph(self.llm, tools).build()
-
-    @cached_property
     def redis_client(self):
         return RedisClient().get()
+
+    @cached_property
+    def mcp_tool_builder(self) -> McpToolBuilder:
+        return McpToolBuilder(
+            redis_client=self.redis_client,
+            mcp_client_factory=lambda host: McpClient(host),
+        )
+
+    @cached_property
+    def ticket_graph(self) -> TicketGraph:
+        return TicketGraph(self.llm, self.mcp_tool_builder)
 
     @cached_property
     def chat_manager(self) -> ChatManager:

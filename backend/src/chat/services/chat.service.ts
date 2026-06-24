@@ -41,7 +41,7 @@ export class ChatService {
       messages: chatObject.messages as unknown as Record<string, unknown>[],
     });
     await this.conversationRepo.save(conversation);
-    await this.redisService.setJson(this.redisKey(id), chatObject);
+    await this.redisService.setJson(this.redisKey(id), chatObject, 7200);
     this.agentService.call(id, message, []);
     return { id };
   }
@@ -77,7 +77,7 @@ export class ChatService {
       agentStatus: AgentStatus.isThinking,
     };
 
-    await this.redisService.setJson(this.redisKey(id), chatObject);
+    await this.redisService.setJson(this.redisKey(id), chatObject, 7200);
     this.agentService.call(id, message, existingMessages);
     return { accepted: true };
   }

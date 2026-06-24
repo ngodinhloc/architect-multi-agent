@@ -39,11 +39,11 @@ The system is composed of seven services communicating over HTTP, WebSocket, Rab
 └────────────┬─────────────────────────────┬───────────────────────────┘
              │ AMQP publish                │ read / write
              │ architecture-agent.chat     │
-┌────────────▼──────────────────────┐   ┌──▼──────────────────┐
-│  RabbitMQ                         │   │  Redis              │
-│  queues:                          │   │  key: chat:{uuid}   │
-│  · architecture-agent.chat        │   └─────────────────────┘
-│  · architecture-agent.accept      │
+┌────────────▼──────────────────────┐   ┌──▼──────────────────────┐
+│  RabbitMQ                         │   │  Redis                   │
+│  queues:                          │   │  key: chat:{uuid}        │
+│  · architecture-agent.chat        │   │  key: mcp_tools          │
+│  · architecture-agent.accept      │   └──────────────────────────┘
 └────────────┬──────────────────────┘
              │ AMQP subscribe (architecture-agent.chat)
 ┌────────────▼────────────────────────────────────────────────────────┐
@@ -259,12 +259,14 @@ class TicketState(MessagesState):
     extract_out: ExtractOut | None = None
 ```
 
-### Tools
+### Tools (dynamic — built from Redis at startup)
 
-| Tool | Schema | What it does |
-|------|--------|-------------|
-| `create_epic` | `EpicInput` | Calls MCP `create_epic` → ticket-service `POST /api/epic/` |
-| `create_ticket` | `TicketInput` | Calls MCP `create_ticket` → ticket-service `POST /api/ticket/` |
+On startup, `McpToolBuilder` reads `mcp_tools` from Redis and dynamically creates a `StructuredTool` for each entry using `pydantic.create_model` to derive the input schema from the stored JSON schema. Each tool calls `McpClient` targeting the `providerHost` recorded in the spec.
+
+| Tool | Discovered from | What it does |
+|------|----------------|-------------|
+| `create_epic` | `mcp_tools` Redis key | Calls MCP `create_epic` → ticket-service `POST /api/epic/` |
+| `create_ticket` | `mcp_tools` Redis key | Calls MCP `create_ticket` → ticket-service `POST /api/ticket/` |
 
 After `extract_node` writes `ExtractOut` to state, `TicketService` reads it directly to build `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied` — which the backend WebSocket gateway delivers to the browser.
 
@@ -273,6 +275,23 @@ After `extract_node` writes `ExtractOut` to state, `TicketService` reads it dire
 ## MCP Server (port 8002)
 
 Exposes two tools via MCP protocol (streamable HTTP at `POST /mcp/`). Translates AI tool calls into REST calls to the ticket-service.
+
+On startup, serialises the full tools spec into Redis under the key `mcp_tools` in the following shape:
+
+```json
+[
+  {
+    "providerName": "Ticket MCP Server",
+    "providerHost": "http://mcp-server:8000",
+    "tools": [
+      { "name": "create_epic", "description": "...", "inputSchema": { ... } },
+      { "name": "create_ticket", "description": "...", "inputSchema": { ... } }
+    ]
+  }
+]
+```
+
+This allows other services (ticket-agent) to discover and build tools dynamically at startup without hardcoding tool definitions.
 
 | Tool | What it does |
 |------|-------------|

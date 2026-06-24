@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     ticket_service_url: str = "http://localhost:8003"
     cors_origins: str = "http://localhost:3000"
+    redis_url: str = "redis://localhost:6379"
+    provider_name: str = "Ticket MCP Server"
+    provider_host: str = "http://localhost:8002"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

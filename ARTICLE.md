@@ -32,9 +32,9 @@ The focus is on the decisions that make this work in practice:
 
 **Architect Agent** (FastAPI + LangGraph, port 8001) — subscribes to `architecture-agent.chat`, runs the directed approval-loop graph, and writes progress to Redis after every node. On accept intent, publishes an `AcceptEvent` to `architecture-agent.accept` instead of creating tickets itself.
 
-**Ticket Agent** (FastAPI + LangGraph, port 8004) — subscribes to `architecture-agent.accept` and runs a two-node `StateGraph`. `create_node` drives a tool-calling loop (`create_epic` → `create_ticket` × N), then `extract_node` reads the tool results and writes `ExtractOut { epicId, ticketIds }` to state. `TicketService` converts this into `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied`.
+**Ticket Agent** (FastAPI + LangGraph, port 8004) — subscribes to `architecture-agent.accept` and runs a two-node `StateGraph`. On startup, reads the `mcp_tools` key from Redis and dynamically builds `StructuredTool` instances via `McpToolBuilder`. `create_node` drives a tool-calling loop (`create_epic` → `create_ticket` × N), then `extract_node` reads the tool results and writes `ExtractOut { epicId, ticketIds }` to state. `TicketService` converts this into `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied`.
 
-**MCP Server** (FastMCP + FastAPI, port 8002) — exposes `create_epic` and `create_ticket` over the MCP protocol. The ticket-agent calls them via `McpClient`; the MCP server translates the calls into REST requests to the ticket-service.
+**MCP Server** (FastMCP + FastAPI, port 8002) — exposes `create_epic` and `create_ticket` over the MCP protocol. On startup, serialises the tools spec (name, description, inputSchema, providerHost) into Redis under `mcp_tools` so consumers can discover tools without hardcoding them. The ticket-agent calls tools via `McpClient`; the MCP server translates the calls into REST requests to the ticket-service.
 
 **Ticket Service** (NestJS 11, port 8003) — minimal CRUD service backed by its own PostgreSQL instance. No RabbitMQ, no Redis, no WebSocket.
 
@@ -410,33 +410,80 @@ def _extract_reply(self, state: dict) -> FinalReplyInterface | None:
     return FinalReplyInterface(epicId=extract_out.epicId, ticketIds=extract_out.ticketIds)
 ```
 
-### Defining tools with typed schemas
+### Defining tools dynamically from Redis
 
-The two MCP operations are exposed as `StructuredTool` instances. Typed Pydantic schemas give the LLM field names and descriptions to work with:
+Rather than hardcoding tool definitions, the ticket-agent reads the tools spec that the MCP server published to Redis on startup and builds `StructuredTool` instances dynamically. `McpToolBuilder` handles this:
 
 ```python
-class EpicInput(BaseModel):
-    id: str = Field(description="Unique identifier for the epic")
-    name: str = Field(description="Name/title of the epic")
-    requirements: list[dict] = Field(default=[], description="List of requirement objects")
-    solution: dict = Field(default={}, description="Solution architecture dict")
+class McpToolBuilder:
+    def __init__(self, redis_client, mcp_client_factory):
+        self._redis_client = redis_client
+        self._mcp_client_factory = mcp_client_factory
 
-def make_create_epic_tool(mcp_client: McpClient) -> StructuredTool:
-    async def _run(id: str, name: str, requirements: list[dict] = [], solution: dict = {}) -> str:
-        result = await mcp_client.call("create_epic", {
-            "epic": {"id": id, "name": name, "requirements": requirements, "solution": solution}
-        })
-        return json.dumps(result)
+    async def build(self) -> list[StructuredTool]:
+        raw = await self._redis_client.get("mcp_tools")
+        tools = []
+        for provider in json.loads(raw):
+            client = self._mcp_client_factory(provider["providerHost"])
+            for tool_spec in provider["tools"]:
+                tools.append(self._build_tool(tool_spec, client))
+        return tools
 
-    return StructuredTool.from_function(
-        name="create_epic",
-        description="Create an epic in the ticket service. Call this when the plan contains an epic to persist.",
-        args_schema=EpicInput,
-        coroutine=_run,
-    )
+    def _build_tool(self, tool_spec: dict, mcp_client: McpClient) -> StructuredTool:
+        name = tool_spec["name"]
+        properties = tool_spec.get("inputSchema", {}).get("properties", {})
+        required = set(tool_spec.get("inputSchema", {}).get("required", []))
+
+        fields = {
+            field_name: (dict if schema.get("type") == "object" else str,
+                         Field() if field_name in required else Field(default=None))
+            for field_name, schema in properties.items()
+        }
+        DynamicInput = create_model(f"{name}_input", **fields)
+
+        return StructuredTool.from_function(
+            name=name,
+            description=tool_spec["description"],
+            args_schema=DynamicInput,
+            coroutine=self._make_coroutine(name, mcp_client),
+        )
+
+    @staticmethod
+    def _make_coroutine(name: str, mcp_client: McpClient):
+        async def run(**kwargs) -> str:
+            result = await mcp_client.call(name, kwargs)
+            return json.dumps(result)
+        return run
 ```
 
-The `@tool` decorator is not used here because tool instances need to capture `mcp_client` as a closure — a factory function returning a `StructuredTool` is the cleaner pattern when dependencies need to be injected.
+`McpToolBuilder` is called in the FastAPI lifespan before the RabbitMQ consumer starts, so tools are ready before any message can arrive:
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await container.init_tools()
+    task = asyncio.create_task(container.rabbitmq_consumer.start())
+    yield
+    task.cancel()
+```
+
+The MCP server writes the spec on its own startup:
+
+```python
+async def write_tools_to_redis() -> None:
+    tools = await fast_mcp.list_tools()
+    spec = [{
+        "providerName": settings.provider_name,
+        "providerHost": settings.provider_host,
+        "tools": [{"name": t.name, "description": t.description, "inputSchema": t.parameters}
+                  for t in tools],
+    }]
+    redis = Redis.from_url(settings.redis_url)
+    async with redis:
+        await redis.set("mcp_tools", json.dumps(spec))
+```
+
+The `providerHost` stored in the spec is what `McpToolBuilder` uses to construct the `McpClient` per provider — the ticket-agent never hardcodes the MCP server URL.
 
 `McpClient` wraps FastMCP's `Client` over streamable HTTP. The response is always read from `content[0].text` — FastMCP serialises the return value there regardless of type:
 
@@ -754,7 +801,7 @@ The `/epic/:id` and `/ticket/:id` Next.js pages fetch the same proxy endpoints a
 
 **Two independent services over a monolithic agent.** The architect-agent and ticket-agent are separate processes communicating via RabbitMQ. The architect-agent publishes and returns immediately — it does not wait for ticket creation. The ticket-agent can be restarted, scaled, or replaced without touching the architect-agent. RabbitMQ durability means an `AcceptEvent` is not lost if the ticket-agent is temporarily down.
 
-**`StructuredTool` factory functions for injected dependencies.** The `create_epic` and `create_ticket` tools need `mcp_client` at runtime. The `@tool` decorator is for module-level functions with no dependencies; `StructuredTool.from_function(coroutine=..., args_schema=...)` is the right pattern when the tool needs to capture a dependency via closure. The factory function (`make_create_epic_tool(mcp_client)`) keeps the tool construction explicit and the schema separate from the wiring.
+**Dynamic tool discovery via Redis instead of hardcoded schemas.** Following the [Active Caching Pattern](https://www.linkedin.com/pulse/microservices-patterns-active-caching-ken-ngo-dllnc/), the MCP server writes its full tools spec (name, description, inputSchema, providerHost) to Redis under `mcp_tools` on startup. The ticket-agent's `McpToolBuilder` reads this and constructs `StructuredTool` instances using `pydantic.create_model` to derive input schemas from the stored JSON. Adding a new MCP tool requires no change to the ticket-agent — it appears automatically on the next restart. The `_make_coroutine` static method avoids `functools.partial` (which breaks LangGraph's `get_type_hints` introspection) by returning a proper `async def` function that closes over `name` and `mcp_client`.
 
 **`comments: list[str] = []` on reviewer models.** When the LLM approves, it may omit the comments field entirely. A required field raises `ValidationError`; an optional field with a default parses cleanly. The approval path should never fail on a missing comments list.
 

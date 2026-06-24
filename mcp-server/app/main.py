@@ -1,9 +1,10 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.configs.settings import settings
-from app.fast_mcp import fast_mcp
+from app.fast_mcp import fast_mcp, write_tools_to_redis
 from app.routers import health_router
 
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,14 @@ class _HealthFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
 
 _mcp_app = fast_mcp.http_app(path="/")
-app = FastAPI(title="Architect MCP Server", lifespan=_mcp_app.lifespan)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with _mcp_app.lifespan(app):
+        await write_tools_to_redis()
+        yield
+
+app = FastAPI(title="Architect MCP Server", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
