@@ -87,8 +87,10 @@ class ChatManager:
 
     async def append_reply_message(
         self, key: str, chat_obj: ChatInterface, error: str | None,
-        final_reply: ReplyInterface | FinalReplyInterface | None,
+        final_reply: ReplyInterface | FinalReplyInterface | str | None,
+        node: NodeName = NodeName.reply,
     ) -> None:
+        # final_reply accepts str to carry the comment for undefined-intent replies
         if error:
             content: str | ReplyInterface | FinalReplyInterface = f"Error: {error}"
         elif final_reply is not None:
@@ -102,7 +104,7 @@ class ChatManager:
                 content=content,
                 timestamp=datetime.now(timezone.utc),
                 agentStatus=AgentStatus.has_replied,
-                node=NodeName.reply,
+                node=node,
             )
         )
         chat_obj.agentStatus = AgentStatus.has_replied

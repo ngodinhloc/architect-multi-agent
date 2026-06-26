@@ -36,6 +36,7 @@ class ChatService:
         }
 
         final_reply = None
+        comment: str | None = None
         user_intent: UserIntent | None = None
         error: str | None = None
 
@@ -50,6 +51,7 @@ class ChatService:
                     )
                     if node_name == NodeName.intent:
                         user_intent = node_output.get("user_intent")
+                        comment = node_output.get("comment")
                     self._message_manager.append_thinking_message(chat_obj, node_name, node_output)
                     await self._message_manager.save_chat(key, chat_obj)
 
@@ -64,6 +66,10 @@ class ChatService:
 
         # On accept, ticket-agent will publish the final reply and set hasReplied in Redis
         if user_intent == UserIntent.accept and not error:
+            return
+
+        if user_intent == UserIntent.undefined:
+            await self._message_manager.append_reply_message(key, chat_obj, error, comment, NodeName.intent)
             return
 
         parsed_reply = self._parse_reply(final_reply)

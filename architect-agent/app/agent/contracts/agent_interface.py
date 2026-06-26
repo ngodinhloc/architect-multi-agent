@@ -7,6 +7,7 @@ class ArchitectState(MessagesState):
     requirement: str = ""
     raw_history: list[MessageInterface] = []
     user_intent: UserIntent = UserIntent.plan
+    comment: str | None = None
     prior_solution: SolutionInterface | None = None
     solution: SolutionInterface | None = None
     solution_review_comments: list[str] = []

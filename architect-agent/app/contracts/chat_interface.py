@@ -8,6 +8,7 @@ class UserIntent(str, Enum):
     plan = "plan"
     accept = "accept"
     refine = "refine"
+    undefined = "undefined"
 
 
 class NodeName(str, Enum):

@@ -10,6 +10,8 @@ The focus is on the decisions that make this work in practice:
 - How to build a two-node ticket agent with a tool-calling loop and a structured extraction step
 - How to stream per-node progress to the browser in real time
 
+![Screenshot 0](./screenshot_0.png)
+
 ![Screenshot 1](./screenshot_1.png)
 
 ![Screenshot 2](./screenshot_2.png)

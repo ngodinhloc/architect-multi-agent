@@ -11,36 +11,38 @@ from app.agent.nodes.reply_node import ReplyNode
 from app.events.rabbitmq_publisher import RabbitMQPublisher
 
 
-# ┌──────────────────────────────────────────────────────────────────┐
-# │                        ArchitectGraph                            │
-# │                                                                  │
-# │  START                                                           │
-# │    │                                                             │
-# │    ▼                                                             │
-# │  intent_node                                                     │
-# │    │                                                             │
-# │    ├──[plan / refine]───────────────────────────────────────┐    │
-# │    │                                                        ▼    │
-# │    │                                           ┌─► solution_node │
-# │    │                                           │            │    │
-# │    │                                           │            ▼    │
-# │    │                                           │ solution_review  │
-# │    │                                  [rejected]│   │[approved]  │
-# │    │                                           └───┘     │      │
-# │    │                                                      ▼      │
-# │    │                                           ┌─► plan_node     │
-# │    │                                           │        │        │
-# │    │                                           │        ▼        │
-# │    │                                  [rejected]│ plan_review    │
-# │    │                                           └───┘    │[approved]
-# │    │                                                     ▼       │
-# │    │                                               reply_node    │
-# │    │                                                     │       │
-# │    │                                                     ▼       │
-# │    │                                                    END      │
-# │    │                                                             │
-# │    └──[accept]──► publishes to architecture-agent.accept ──► END │
-# └──────────────────────────────────────────────────────────────────┘
+# ┌────────────────────────────────────────────────────────────────────┐
+# │                         ArchitectGraph                             │
+# │                                                                    │
+# │  START                                                             │
+# │    │                                                               │
+# │    ▼                                                               │
+# │  intent_node                                                       │
+# │    │                                                               │
+# │    ├──[undefined]──► sets comment in state ──────────────► END     │
+# │    │                                                               │
+# │    ├──[accept]──► publishes to architecture-agent.accept ──► END   │
+# │    │                                                               │
+# │    └──[plan / refine]──────────────────────────────────────┐       │
+# │                                                            ▼       │
+# │                                             ┌─► solution_node      │
+# │                                             │        │             │
+# │                                             │        ▼             │
+# │                                             │  solution_review     │
+# │                                    [rejected]│   │ [approved]      │
+# │                                             └───┘   │             │
+# │                                                     ▼             │
+# │                                             ┌─► plan_node         │
+# │                                             │        │             │
+# │                                             │        ▼             │
+# │                                    [rejected]│  plan_review        │
+# │                                             └───┘   │ [approved]  │
+# │                                                     ▼             │
+# │                                               reply_node           │
+# │                                                     │             │
+# │                                                     ▼             │
+# │                                                    END             │
+# └────────────────────────────────────────────────────────────────────┘
 
 
 class ArchitectGraph:
@@ -63,7 +65,7 @@ class ArchitectGraph:
         graph.add_conditional_edges(
             NodeName.intent,
             self._route_intent,
-            {"accept": END, "plan": NodeName.solution, "refine": NodeName.solution},
+            {"accept": END, "undefined": END, "plan": NodeName.solution, "refine": NodeName.solution},
         )
 
         graph.add_edge(NodeName.solution, NodeName.solution_review)

@@ -21,12 +21,14 @@ interface CompletedTurn {
   userMessage: string;
   thinkingMessages: MessageInterface[];
   result: ReplyContent;
+  reply: string | null;
 }
 
 interface Turn {
   userMessage: string;
   agentMessages: MessageInterface[];
   result: ReplyContent;
+  reply: string | null;
   error: string | null;
 }
 
@@ -95,8 +97,8 @@ function splitTurns(messages: MessageInterface[]): Turn[] {
           : isFinalReplyInterface(content)
           ? content
           : null;
-        const error: string | null = typeof content === "string" ? content : null;
-        turns.push({ userMessage, agentMessages: [...agentMessages], result, error });
+        const reply: string | null = typeof content === "string" ? content : null;
+        turns.push({ userMessage, agentMessages: [...agentMessages], result, reply, error: null });
         userMessage = "";
         agentMessages = [];
       }
@@ -122,6 +124,7 @@ export default function ArchitectChat() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ReplyContent>(null);
+  const [reply, setReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageInterface[]>([]);
   const [isThinkingIdle, setIsThinkingIdle] = useState(false);
@@ -172,6 +175,7 @@ export default function ArchitectChat() {
     agentMessageOffsetRef.current = 0;
     setLoading(false);
     setResult(null);
+    setReply(null);
     setError(null);
     setMessages([]);
     setIsThinkingIdle(false);
@@ -191,6 +195,7 @@ export default function ArchitectChat() {
     prevThinkingCountRef.current = 0;
     agentMessageOffsetRef.current = 0;
     setResult(null);
+    setReply(null);
     setError(null);
     setMessages([]);
     setIsThinkingIdle(false);
@@ -208,6 +213,7 @@ export default function ArchitectChat() {
         setUserMessage(lastTurn.userMessage);
         setMessages(lastTurn.agentMessages);
         if (lastTurn.result) setResult(lastTurn.result);
+        else if (lastTurn.reply) setReply(lastTurn.reply);
         else if (lastTurn.error) setError(lastTurn.error);
 
         setCompletedTurns(
@@ -215,6 +221,7 @@ export default function ArchitectChat() {
             userMessage: t.userMessage,
             thinkingMessages: t.agentMessages.filter((m) => m.agentStatus === "isThinking"),
             result: t.result,
+            reply: t.reply,
           }))
         );
         agentMessageOffsetRef.current = prevTurns.reduce((acc, t) => acc + t.agentMessages.length, 0);
@@ -285,8 +292,10 @@ export default function ArchitectChat() {
             const c = finalMsg.content;
             if (isReplyInterface(c) || isFinalReplyInterface(c)) {
               setResult(c);
+            } else if (typeof c === "string") {
+              setReply(c);
             } else {
-              setError(typeof c === "string" ? c : "The agent did not return a response.");
+              setError("The agent did not return a response.");
             }
           }
           stopChat(id).catch(() => {});
@@ -310,6 +319,7 @@ export default function ArchitectChat() {
     agentMessageOffsetRef.current = 0;
     setLoading(true);
     setError(null);
+    setReply(null);
     setResult(null);
     setMessages([]);
     setIsThinkingIdle(false);
@@ -339,6 +349,7 @@ export default function ArchitectChat() {
           userMessage,
           thinkingMessages: messages.filter((m) => m.agentStatus === "isThinking"),
           result,
+          reply,
         },
       ]);
     }
@@ -349,6 +360,7 @@ export default function ArchitectChat() {
     prevThinkingCountRef.current = 0;
     setLoading(true);
     setError(null);
+    setReply(null);
     setResult(null);
     setMessages([]);
     setIsThinkingIdle(false);
@@ -421,13 +433,19 @@ export default function ArchitectChat() {
                   ))}
                 </ul>
               )}
+              {turn.reply && (
+                <div className="flex justify-end">
+                  <div className="max-w-xl rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
+                    {turn.reply}
+                  </div>
+                </div>
+              )}
               {turn.result && isReplyInterface(turn.result) && (
                 <PlanCard reply={turn.result} showActions={false} />
               )}
               {turn.result && isFinalReplyInterface(turn.result) && (
                 <FinalReplyCard reply={turn.result} />
               )}
-              <hr className="border-zinc-200 dark:border-zinc-800" />
             </div>
           ))}
 
@@ -462,6 +480,14 @@ export default function ArchitectChat() {
               )}
 
               {loading && <LoadingSkeleton />}
+
+              {reply && !loading && (
+                <div className="flex justify-end">
+                  <div className="max-w-xl rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
+                    {reply}
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">

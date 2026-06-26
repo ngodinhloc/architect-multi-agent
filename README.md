@@ -2,6 +2,8 @@
 
 A **multi-agent AI** system for software architecture planning. Describe a requirement — _"implement an SFTP solution"_ — and a pipeline of specialised AI agents collaborates to produce a solution architecture and development tickets. An approval-loop graph designs and reviews the plan; a separate tool-calling agent persists it as an epic and tickets via MCP. Review the plan, refine it with follow-ups, or accept it to trigger ticket creation.
 
+![screenshot 0](screenshot_0.png)
+
 ![screenshot 1](screenshot_1.png)
 
 ![screenshot 2](screenshot_2.png)

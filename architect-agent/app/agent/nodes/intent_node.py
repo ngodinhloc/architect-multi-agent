@@ -29,6 +29,10 @@ class IntentNode:
         prompt = INTENT_PROMPT.format(user_text=user_text, has_prior_plan=has_prior_plan)
         result: IntentOut = await self._llm.ainvoke([SystemMessage(content=INTENT_PERSONA), HumanMessage(content=prompt)])
 
+        if result.intent == UserIntent.undefined:
+            comment = result.comment or "I can help you plan software architecture. Could you describe a requirement or system you'd like to build?"
+            return {"user_intent": UserIntent.undefined, "comment": comment}
+
         if result.intent == UserIntent.accept:
             return await self._handle_accept(state)
 
