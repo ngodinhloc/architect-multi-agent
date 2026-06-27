@@ -18,12 +18,11 @@ class MessageProcessor:
             handler = self._handler_map.get(event_name)
             if handler is None:
                 self._logger.warning(
-                    "No handler registered for eventName: %s",
-                    event_name,
-                    extra={"conversationId": conversation_id},
+                    "MessageProcessor.process: No handler registered",
+                    extra={"conversationId": conversation_id, "eventName": event_name},
                 )
                 return
             event = EventBuilder.build(payload)
             await handler.handle(event)
         except Exception:
-            self._logger.exception("Failed to process message")
+            self._logger.exception("MessageProcessor.process: Failed to process message")

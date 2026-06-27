@@ -18,7 +18,7 @@ class RabbitMQConsumer:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self._logger.error("RabbitMQ consumer error: %s — retrying in 5s", e)
+                self._logger.error("RabbitMQConsumer.start: RabbitMQ consumer error", extra={"error": str(e)})
                 await asyncio.sleep(5)
 
     async def _run(self) -> None:
@@ -31,8 +31,8 @@ class RabbitMQConsumer:
         await queue.bind(exchange, routing_key=CHAT_EVENT_NAME)
 
         self._logger.info(
-            "RabbitMQ consumer started | exchange=%s routing_key=%s queue=%s",
-            EXCHANGE_NAME, CHAT_EVENT_NAME, CHAT_QUEUE,
+            "RabbitMQConsumer._run: RabbitMQ consumer started",
+            extra={"exchange": EXCHANGE_NAME, "routingKey": CHAT_EVENT_NAME, "queue": CHAT_QUEUE},
         )
 
         async with queue.iterator() as messages:

@@ -6,14 +6,14 @@ export const CHAT_TTL_SECONDS = 7200;
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
-  private client: Redis;
+  private client!: Redis;
 
   onModuleInit() {
     this.client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
       lazyConnect: false,
       maxRetriesPerRequest: 3,
     });
-    this.client.on('error', (err) => this.logger.error(JSON.stringify({ conversationId: null, message: `Redis error: ${err}` })));
+    this.client.on('error', (err) => this.logger.error('RedisService.onModuleInit: Redis error', { conversationId: null, error: String(err) }));
   }
 
   async onModuleDestroy() {

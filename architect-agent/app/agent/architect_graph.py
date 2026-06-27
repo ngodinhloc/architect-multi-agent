@@ -61,7 +61,6 @@ class ArchitectGraph:
         graph.add_node(NodeName.reply, ReplyNode())
 
         graph.add_edge(START, NodeName.intent)
-
         graph.add_conditional_edges(
             NodeName.intent,
             self._route_intent,

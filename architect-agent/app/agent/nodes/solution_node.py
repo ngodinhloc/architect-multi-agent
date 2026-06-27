@@ -1,4 +1,3 @@
-import json
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -26,12 +25,12 @@ class SolutionNode:
             current = state.get("solution")
             return SOLUTION_PROMPT_REVISE.format(
                 requirement=requirement,
-                current_solution=json.dumps(current.model_dump() if current else {}, indent=2),
+                current_solution=current.model_dump_json(indent=2) if current else "{}",
                 comments="\n".join(f"- {c}" for c in comments),
             )
         if prior_solution:
             return SOLUTION_PROMPT_REFINE.format(
                 requirement=requirement,
-                prior_solution=json.dumps(prior_solution.model_dump(), indent=2),
+                prior_solution=prior_solution.model_dump_json(indent=2),
             )
         return SOLUTION_PROMPT_NEW.format(requirement=requirement)

@@ -11,7 +11,7 @@ import {
   MessageInterface,
   AgentStatus,
 } from '../contracts/chat.interface';
-import { AgentService } from './agent.service';
+import { MessageService } from './message.service';
 
 @Injectable()
 export class ChatService {
@@ -19,7 +19,7 @@ export class ChatService {
     @InjectRepository(Conversation)
     private readonly conversationRepo: Repository<Conversation>,
     private readonly redisService: RedisService,
-    private readonly agentService: AgentService,
+    private readonly messageService: MessageService,
   ) {}
 
   private redisKey(id: string): string {
@@ -42,7 +42,7 @@ export class ChatService {
     });
     await this.conversationRepo.save(conversation);
     await this.redisService.setJson(this.redisKey(id), chatObject, 7200);
-    this.agentService.call(id, message, []);
+    this.messageService.publish(id, message, []);
     return { id };
   }
 
@@ -78,7 +78,7 @@ export class ChatService {
     };
 
     await this.redisService.setJson(this.redisKey(id), chatObject, 7200);
-    this.agentService.call(id, message, existingMessages);
+    this.messageService.publish(id, message, existingMessages);
     return { accepted: true };
   }
 

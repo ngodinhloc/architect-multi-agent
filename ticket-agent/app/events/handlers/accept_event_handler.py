@@ -11,8 +11,8 @@ class AcceptEventHandler:
 
     async def handle(self, event: AcceptEvent) -> None:
         self._logger.info(
-            "Received accept event",
-            extra={"conversationId": event.data.conversationId},
+            "AcceptEventHandler.handle: Received accept event",
+            extra={"conversationId": event.data.conversationId, "content": event.data.content},
         )
         request = TicketRequest(
             conversationId=event.data.conversationId,

@@ -22,10 +22,12 @@ class ChatService:
         raw_history = request.history
 
         self._logger.info(
-            "Starting graph | message=%r | history=%s",
-            request.message,
-            json.dumps([m.model_dump() for m in raw_history], default=str),
-            extra={"conversationId": request.conversationId},
+            "ChatService.execute: Starting graph",
+            extra={
+                "conversationId": request.conversationId,
+                "body": request.message,
+                "history": [m.model_dump() for m in raw_history],
+            },
         )
 
         initial_state = {
@@ -44,10 +46,12 @@ class ChatService:
             async for update in self._graph.astream(initial_state, stream_mode="updates"):
                 for node_name, node_output in update.items():
                     self._logger.info(
-                        "Node completed | node=%s | output=%s",
-                        node_name,
-                        json.dumps(node_output, default=str),
-                        extra={"conversationId": request.conversationId},
+                        "ChatService.execute: Node completed",
+                        extra={
+                            "conversationId": request.conversationId,
+                            "node": node_name,
+                            "output": node_output,
+                        },
                     )
                     if node_name == NodeName.intent:
                         user_intent = node_output.get("user_intent")
@@ -60,8 +64,8 @@ class ChatService:
         except Exception as e:
             error = str(e)
             self._logger.exception(
-                "Graph error",
-                extra={"conversationId": request.conversationId},
+                "ChatService.execute: Graph error",
+                extra={"conversationId": request.conversationId, "error": error},
             )
 
         # On accept, ticket-agent will publish the final reply and set hasReplied in Redis

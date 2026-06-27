@@ -4,6 +4,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - ./infra/rabbitmq/advanced.config:/etc/rabbitmq/advanced.config
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -68,6 +70,8 @@ services:
       - "8003:8000"
     environment:
       PORT: "8000"
+      APP_ENV: "DEV"
+      SERVICE_NAME: "ticket-service"
       DATABASE_URL: "postgresql://tickets:tickets@postgres-tickets:5432/tickets"
     volumes:
       - ./ticket-service:/app
@@ -91,6 +95,8 @@ services:
     ports:
       - "8002:8000"
     environment:
+      APP_ENV: "DEV"
+      SERVICE_NAME: "mcp-server"
       CORS_ORIGINS: "http://localhost:3000,http://architect-agent:8000"
       TICKET_SERVICE_URL: "http://ticket-service:8000"
       REDIS_URL: "redis://redis:6379"
@@ -120,6 +126,8 @@ services:
     env_file:
       - ./architect-agent/.env
     environment:
+      APP_ENV: "DEV"
+      SERVICE_NAME: "architect-agent"
       REDIS_URL: "redis://redis:6379"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
       CORS_ORIGINS: "http://localhost:3000,http://backend:8000"
@@ -147,6 +155,8 @@ services:
     env_file:
       - ./architect-agent/.env
     environment:
+      APP_ENV: "DEV"
+      SERVICE_NAME: "ticket-agent"
       REDIS_URL: "redis://redis:6379"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
       MCP_SERVER_URL: "http://mcp-server:8000"
@@ -176,6 +186,8 @@ services:
       - "8000:8000"
     environment:
       PORT: "8000"
+      APP_ENV: "DEV"
+      SERVICE_NAME: "backend"
       CORS_ORIGINS: "http://localhost:3000"
       DATABASE_URL: "postgresql://architect:architect@postgres-backend:5432/architect"
       REDIS_URL: "redis://redis:6379"

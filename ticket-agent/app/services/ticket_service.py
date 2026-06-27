@@ -29,15 +29,14 @@ class TicketService:
                 final_state = state
                 last = state["messages"][-1]
                 self._logger.info(
-                    "Agent step | type=%s",
-                    type(last).__name__,
-                    extra={"conversationId": request.conversationId},
+                    "TicketService.execute: Agent step",
+                    extra={"conversationId": request.conversationId, "type": type(last).__name__},
                 )
         except Exception as e:
             error = str(e)
             self._logger.exception(
-                "Ticket agent error",
-                extra={"conversationId": request.conversationId},
+                "TicketService.execute: Ticket agent error",
+                extra={"conversationId": request.conversationId, "error": error},
             )
 
         parsed_reply = self._extract_reply(final_state) if final_state else None

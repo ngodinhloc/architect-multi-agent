@@ -4,12 +4,12 @@ import { CHAT_EVENT_NAME, type ChatEventInterface } from '../../rabbitmq/contrac
 import { MessageInterface } from '../contracts/chat.interface';
 
 @Injectable()
-export class AgentService {
-  private readonly logger = new Logger(AgentService.name);
+export class MessageService {
+  private readonly logger = new Logger(MessageService.name);
 
   constructor(private readonly rabbitMQService: RabbitMQService) {}
 
-  call(id: string, message: string, history: MessageInterface[] = []): void {
+  publish(id: string, message: string, history: MessageInterface[] = []): void {
     try {
       const event: ChatEventInterface = {
         eventName: CHAT_EVENT_NAME,
@@ -18,7 +18,10 @@ export class AgentService {
       };
       this.rabbitMQService.publish(event);
     } catch (err) {
-      this.logger.error(JSON.stringify({ conversationId: id, message: `Failed to publish to RabbitMQ: ${err}` }));
+      this.logger.error(
+        `MessageService.publish: Failed to publish to RabbitMQ: ${err}`,
+        { conversationId: id, body: message, history },
+      );
     }
   }
 }

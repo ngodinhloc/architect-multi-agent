@@ -26,9 +26,9 @@ class McpToolBuilder:
     async def build(self) -> list[StructuredTool]:
         raw = await self._redis_client.get("mcp_tools")
         if not raw:
-            logger.warning("No mcp_tools found in Redis")
+            logger.warning("McpToolBuilder.build: No mcp_tools found in Redis")
             return []
-        logger.info("mcp_tools from Redis: %s", raw)
+        logger.info("McpToolBuilder.build: mcp_tools from Redis", extra={"raw": raw})
 
         tools = []
         for provider in json.loads(raw):
@@ -36,7 +36,7 @@ class McpToolBuilder:
             client = self._mcp_client_factory(provider.get("providerHost", ""))
             for tool_spec in provider.get("tools", []):
                 tools.append(self._build_tool(tool_spec, client))
-                logger.info("Registered tool '%s' from provider '%s'", tool_spec["name"], provider_name)
+                logger.info("McpToolBuilder.build: Registered tool", extra={"tool": tool_spec["name"], "provider": provider_name})
 
         return tools
 

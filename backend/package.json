@@ -30,10 +30,10 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@types/amqplib": "^0.10.5",
-    "@types/ws": "^8.5.13",
     "@types/express": "^5.0.0",
     "@types/node": "^20.17.10",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
     "typescript": "^5.7.3"
   }
 }

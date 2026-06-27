@@ -14,7 +14,7 @@ export class EpicService {
   ) {}
 
   async create(dto: CreateEpicDto): Promise<Epic> {
-    this.logger.log(JSON.stringify({ conversationId: null, message: `Creating epic id=${dto.id}` }));
+    this.logger.log('EpicService.create: Creating epic', { conversationId: null, id: dto.id });
     const epic = this.epicRepo.create({
       id: dto.id,
       name: dto.name,

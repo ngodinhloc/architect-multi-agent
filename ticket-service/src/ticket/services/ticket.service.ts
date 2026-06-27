@@ -14,7 +14,7 @@ export class TicketService {
   ) {}
 
   async create(dto: CreateTicketDto): Promise<Ticket> {
-    this.logger.log(JSON.stringify({ conversationId: null, message: `Creating ticket id=${dto.id} epicId=${dto.epicId}` }));
+    this.logger.log('TicketService.create: Creating ticket', { conversationId: null, id: dto.id, epicId: dto.epicId });
     const ticket = this.ticketRepo.create({
       id: dto.id,
       epicId: dto.epicId,

@@ -27,4 +27,7 @@ class RabbitMQPublisher:
             ),
             routing_key=routing_key,
         )
-        self._logger.info("Published to exchange=%s routing_key=%s", EXCHANGE_NAME, routing_key)
+        self._logger.info(
+            "RabbitMQPublisher.publish: Published",
+            extra={"exchange": EXCHANGE_NAME, "routingKey": routing_key},
+        )

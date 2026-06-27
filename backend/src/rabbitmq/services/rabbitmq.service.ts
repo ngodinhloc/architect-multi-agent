@@ -26,11 +26,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       await this.channel.assertExchange(EXCHANGE, 'topic', { durable: true });
       await this.channel.assertQueue(QUEUE, { durable: true });
       await this.channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
-      this.logger.log(JSON.stringify({ conversationId: null, message: `Connected to RabbitMQ, exchange: ${EXCHANGE}, queue: ${QUEUE}` }));
+      this.logger.log('RabbitMQService.connect: Connected to RabbitMQ', { conversationId: null, exchange: EXCHANGE, queue: QUEUE });
     } catch (err) {
       if (attempt >= maxAttempts) throw err;
       const delay = Math.min(1000 * attempt, 10000);
-      this.logger.warn(JSON.stringify({ conversationId: null, message: `RabbitMQ not ready (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms…` }));
+      this.logger.warn(`RabbitMQService.connect: RabbitMQ not ready, retrying in ${delay}ms…`, { conversationId: null, attempt, maxAttempts });
       await new Promise((r) => setTimeout(r, delay));
       return this.connect(url, attempt + 1);
     }
@@ -43,10 +43,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   publish(event: ChatEventInterface): void {
     if (!this.channel) {
-      this.logger.error(JSON.stringify({ conversationId: event.data.conversationId, message: 'RabbitMQ channel not ready' }));
+      this.logger.error('RabbitMQService.publish: RabbitMQ channel not ready', { conversationId: event.data.conversationId });
       return;
     }
     this.channel.publish(EXCHANGE, ROUTING_KEY, Buffer.from(JSON.stringify(event)), { persistent: true });
-    this.logger.log(JSON.stringify({ conversationId: event.data.conversationId, message: `Published to exchange: ${EXCHANGE}` }));
+    this.logger.log('RabbitMQService.publish: Published', { conversationId: event.data.conversationId, exchange: EXCHANGE });
   }
 }
