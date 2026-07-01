@@ -2,6 +2,7 @@
   "realm": "architect",
   "enabled": true,
   "sslRequired": "none",
+  "accessTokenLifespan": 1800,
   "users": [
     {
       "username": "dev",
@@ -28,7 +29,11 @@
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "secret": "ticket-agent-secret"
+      "clientAuthenticatorType": "client-jwt",
+      "attributes": {
+        "use.jwks.url": "true",
+        "jwks.url": "http://ticket-agent:8000/api/.well-known/jwks"
+      }
     },
     {
       "clientId": "mcp-server",
@@ -38,7 +43,11 @@
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "secret": "mcp-server-secret"
+      "clientAuthenticatorType": "client-jwt",
+      "attributes": {
+        "use.jwks.url": "true",
+        "jwks.url": "http://mcp-server:8000/api/.well-known/jwks"
+      }
     },
     {
       "clientId": "backend",
@@ -48,7 +57,11 @@
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "secret": "backend-secret"
+      "clientAuthenticatorType": "client-jwt",
+      "attributes": {
+        "use.jwks.url": "true",
+        "jwks.url": "http://backend:8000/api/.well-known/jwks"
+      }
     },
     {
       "clientId": "frontend",

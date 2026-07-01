@@ -14,12 +14,12 @@ export default function Sidebar() {
   const [history, setHistory] = useState<ConversationSummary[]>([]);
 
   useEffect(() => {
-    if (!user?.username) return;
-    const refresh = () => getHistory(user.username).then(setHistory).catch(() => {});
+    if (!user) return;
+    const refresh = () => getHistory().then(setHistory).catch(() => {});
     refresh();
     window.addEventListener("chat-completed", refresh);
     return () => window.removeEventListener("chat-completed", refresh);
-  }, [user?.username]);
+  }, [user]);
 
   function handleNewChat() {
     router.push(`/?session=${Date.now()}`);

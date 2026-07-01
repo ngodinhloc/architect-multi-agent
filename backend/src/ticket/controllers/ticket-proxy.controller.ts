@@ -1,5 +1,5 @@
 import { Controller, Get, Param, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { KeycloakTokenService } from '../../auth/keycloak/keycloak-token.service';
+import { KeycloakTokenService } from '../../auth/services/keycloak-token.service';
 
 const TICKET_SERVICE_URL = process.env.TICKET_SERVICE_URL ?? 'http://localhost:8003';
 

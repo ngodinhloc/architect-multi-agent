@@ -5,7 +5,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     volumes:
-      - ./infra/rabbitmq/advanced.config:/etc/rabbitmq/advanced.config
+      - ./rabbitmq/advanced.config:/etc/rabbitmq/advanced.config
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -73,7 +73,7 @@ services:
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
     volumes:
-      - ./infra/keycloak:/opt/keycloak/data/import
+      - ./keycloak:/opt/keycloak/data/import
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9000' 2>/dev/null && echo ok || exit 1"]
       interval: 10s
@@ -118,6 +118,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8002:8000"
+    env_file:
+      - ./mcp-server/.env
     environment:
       APP_ENV: "DEV"
       SERVICE_NAME: "mcp-server"
@@ -129,7 +131,6 @@ services:
       KEYCLOAK_URL: "http://keycloak:8080"
       KEYCLOAK_REALM: "architect"
       KEYCLOAK_CLIENT_ID: "mcp-server"
-      KEYCLOAK_CLIENT_SECRET: "mcp-server-secret"
     volumes:
       - ./mcp-server:/app
     depends_on:
@@ -184,6 +185,7 @@ services:
       - "8004:8000"
     env_file:
       - ./architect-agent/.env
+      - ./ticket-agent/.env
     environment:
       APP_ENV: "DEV"
       SERVICE_NAME: "ticket-agent"
@@ -194,7 +196,6 @@ services:
       KEYCLOAK_URL: "http://keycloak:8080"
       KEYCLOAK_REALM: "architect"
       KEYCLOAK_CLIENT_ID: "ticket-agent"
-      KEYCLOAK_CLIENT_SECRET: "ticket-agent-secret"
     volumes:
       - ./ticket-agent:/app
     depends_on:
@@ -220,6 +221,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
       PORT: "8000"
       APP_ENV: "DEV"
@@ -230,9 +233,9 @@ services:
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
       TICKET_SERVICE_URL: "http://ticket-service:8000"
       KEYCLOAK_URL: "http://keycloak:8080"
+      KEYCLOAK_PUBLIC_URL: "http://localhost:8080"
       KEYCLOAK_REALM: "architect"
       KEYCLOAK_CLIENT_ID: "backend"
-      KEYCLOAK_CLIENT_SECRET: "backend-secret"
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules

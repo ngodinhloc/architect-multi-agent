@@ -4,11 +4,11 @@ import {
   Get,
   Body,
   Param,
-  Query,
   HttpCode,
   ParseUUIDPipe,
-  BadRequestException,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { ChatService } from '../services/chat.service';
 import { NewChatDto } from '../dto/new-chat.dto';
 import { ContinueChatDto } from '../dto/continue-chat.dto';
@@ -18,8 +18,8 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post('new')
-  newChat(@Body() dto: NewChatDto): Promise<{ id: string }> {
-    return this.chatService.newChat(dto.message, dto.username);
+  newChat(@Req() req: Request, @Body() dto: NewChatDto): Promise<{ id: string }> {
+    return this.chatService.newChat(dto.message, req.user?.username);
   }
 
   @Post(':id/cont')
@@ -37,9 +37,8 @@ export class ChatController {
   }
 
   @Get('history')
-  getHistory(@Query('username') username: string) {
-    if (!username) throw new BadRequestException('username query param is required');
-    return this.chatService.getHistory(username);
+  getHistory(@Req() req: Request) {
+    return this.chatService.getHistory(req.user!.username);
   }
 
   @Get(':id')

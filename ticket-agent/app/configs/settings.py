@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     keycloak_url: str = "http://localhost:8080"
     keycloak_realm: str = "architect"
     keycloak_client_id: str = "ticket-agent"
-    keycloak_client_secret: str = ""
+    private_key_pem: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

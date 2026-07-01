@@ -53,17 +53,25 @@ export class JwtGuard implements CanActivate {
       throw new UnauthorizedException('No matching public key found');
     }
 
+    let payload: Record<string, unknown>;
     try {
       const publicKey = await importJWK(jwk, 'RS256');
-      await jwtVerify(token, publicKey, { issuer: this.issuer });
+      const result = await jwtVerify(token, publicKey, { issuer: this.issuer });
+      payload = result.payload as Record<string, unknown>;
     } catch (err) {
+      this.logger.warn('JwtGuard.canActivate: JWT validation failed', {
+        kid,
+        path: request.path,
+        error: (err as Error).message,
+      });
       throw new UnauthorizedException(`Token invalid: ${(err as Error).message}`);
     }
 
     this.logger.log('JwtGuard.canActivate: JWT validated', {
-      issuer: this.issuer,
+      client_id: payload['azp'] ?? payload['sub'],
       kid,
       path: request.path,
+      exp: payload['exp'],
     });
     return true;
   }

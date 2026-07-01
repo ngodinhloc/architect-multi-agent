@@ -27,8 +27,13 @@ class JwtMiddleware:
         if not request.url.path.startswith("/mcp"):
             return await call_next(request)
 
+        path = request.url.path
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
+            self._logger.warning(
+                "JwtMiddleware.handle: Missing Authorization header",
+                extra={"path": path},
+            )
             return JSONResponse(status_code=401, content={"detail": "Missing or invalid Authorization header"})
 
         token = auth_header.removeprefix("Bearer ")
@@ -37,6 +42,10 @@ class JwtMiddleware:
             unverified_header = jwt.get_unverified_header(token)
             kid = unverified_header.get("kid")
         except jwt.DecodeError as e:
+            self._logger.warning(
+                "JwtMiddleware.handle: Malformed token",
+                extra={"path": path, "error": str(e)},
+            )
             return JSONResponse(status_code=401, content={"detail": f"Invalid token: {e}"})
 
         keys = await self._fetch_jwks()
@@ -45,6 +54,10 @@ class JwtMiddleware:
 
         matching_key = next((k for k in keys if k.get("kid") == kid), None)
         if matching_key is None:
+            self._logger.warning(
+                "JwtMiddleware.handle: No matching public key",
+                extra={"path": path, "kid": kid},
+            )
             return JSONResponse(status_code=401, content={"detail": "No matching public key found"})
 
         try:
@@ -57,13 +70,21 @@ class JwtMiddleware:
                 options={"verify_aud": False},
             )
         except jwt.ExpiredSignatureError:
+            self._logger.warning(
+                "JwtMiddleware.handle: Token expired",
+                extra={"path": path, "kid": kid},
+            )
             return JSONResponse(status_code=401, content={"detail": "Token expired"})
         except jwt.InvalidTokenError as e:
+            self._logger.warning(
+                "JwtMiddleware.handle: Token invalid",
+                extra={"path": path, "kid": kid, "error": str(e)},
+            )
             return JSONResponse(status_code=401, content={"detail": f"Token invalid: {e}"})
 
         self._logger.info(
             "JwtMiddleware.handle: JWT validated",
-            extra={"issuer": payload.get("iss"), "client_id": payload.get("azp"), "path": request.url.path},
+            extra={"client_id": payload.get("azp"), "sub": payload.get("sub"), "kid": kid, "path": path},
         )
         return await call_next(request)
 

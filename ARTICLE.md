@@ -8,7 +8,7 @@ The focus is on the decisions that make this work in practice:
 - How to carry conversation context across turns for the refine flow
 - How to hand off between two independent services using RabbitMQ
 - How to build a two-node ticket agent with a tool-calling loop and a structured extraction step
-- How to authenticate service-to-service calls with OAuth 2.0 Client Credentials via Keycloak
+- How to authenticate service-to-service calls with OAuth 2.0 Client Credentials and `private_key_jwt` via Keycloak
 - How to add user login with OpenID Connect (OIDC) Authorization Code Flow and PKCE
 - How to stream per-node progress to the browser in real time
 
@@ -32,7 +32,7 @@ The focus is on the decisions that make this work in practice:
 
 **Backend** (NestJS 11, port 8000) — REST chat API and ticket proxy. Creates conversations in PostgreSQL (stores `username` from the authenticated user), manages live state in Redis, publishes `ChatEvent` to RabbitMQ, and drives the WebSocket gateway. Also proxies `/api/epic/*` and `/api/ticket/*` to the ticket-service — each proxy request includes a Keycloak access token obtained via the `backend` client credentials.
 
-**Keycloak** (port 8080, realm `architect`) — central Authorization Server for all authentication. Manages two types of clients: confidential M2M clients (`ticket-agent`, `mcp-server`, `backend`) that use the OAuth 2.0 Client Credentials flow to obtain access tokens for service-to-service calls, and the public `frontend` OIDC client that uses Authorization Code + PKCE for browser user login. Issues RS256-signed JWTs; services validate tokens by fetching Keycloak's JWKS endpoint. The entire realm configuration is in `infra/keycloak/realm.json` and auto-imported on startup.
+**Keycloak** (port 8080, realm `architect`) — central Authorization Server for all authentication. Manages two types of clients: confidential M2M clients (`ticket-agent`, `mcp-server`, `backend`) that use the OAuth 2.0 Client Credentials grant with `private_key_jwt` client authentication (RFC 7523) to obtain access tokens for service-to-service calls, and the public `frontend` OIDC client that uses Authorization Code + PKCE for browser user login. Issues RS256-signed JWTs; receiving services validate tokens by fetching Keycloak's JWKS endpoint. Each M2M service holds its own RSA-2048 private key and serves the public key via `/api/.well-known/jwks`; Keycloak fetches these endpoints to authenticate client assertions. The entire realm configuration is in `keycloak/realm.json` and auto-imported on first startup.
 
 **RabbitMQ** — two durable queues: `architecture-agent.chat` (backend → architect-agent) and `architecture-agent.accept` (architect-agent → ticket-agent). Both publishers return immediately; consumers process independently.
 
@@ -648,11 +648,13 @@ Content-Type: application/json
 
 ## Step 8 — Authentication with Keycloak: OAuth 2.0 and OIDC
 
-The ticket-creation path crosses three service boundaries: ticket-agent → mcp-server, mcp-server → ticket-service, and backend → ticket-service. The frontend also needs to identify who is using the app. Both problems are solved with **Keycloak** as the central Authorization Server — but with different OAuth 2.0 flows for each case.
+The ticket-creation path crosses three service boundaries: ticket-agent → mcp-server, mcp-server → ticket-service, and backend → ticket-service. The frontend also needs to identify who is using the app. Both problems are solved with **Keycloak** as the central Authorization Server — but with different flows for each case.
 
-### Service-to-service: OAuth 2.0 Client Credentials Flow
+### Service-to-service: OAuth 2.0 Client Credentials + `private_key_jwt`
 
-Machine-to-machine calls use the **Client Credentials** grant (`grant_type=client_credentials`). This is the standard OAuth 2.0 flow for services that act on their own behalf, with no user involved. Each service is registered in Keycloak as a confidential client with a service account:
+Machine-to-machine calls use the **Client Credentials** grant with **`private_key_jwt`** client authentication (RFC 7523). Rather than a shared secret, each service proves its identity by signing a JWT assertion with its own RSA-2048 private key. Keycloak fetches the service's public JWKS endpoint to verify the signature, then issues a 30-minute RS256 access token.
+
+Each M2M client in Keycloak is configured without a secret — the JWKS URL takes its place:
 
 ```json
 {
@@ -660,39 +662,91 @@ Machine-to-machine calls use the **Client Credentials** grant (`grant_type=clien
   "publicClient": false,
   "serviceAccountsEnabled": true,
   "standardFlowEnabled": false,
-  "secret": "ticket-agent-secret"
+  "clientAuthenticatorType": "client-jwt",
+  "attributes": {
+    "use.jwks.url": "true",
+    "jwks.url": "http://ticket-agent:8000/api/.well-known/jwks"
+  }
 }
 ```
 
-`serviceAccountsEnabled: true` creates the service account; `standardFlowEnabled: false` prevents the client from being used for interactive user login. The token endpoint call is straightforward:
+`serviceAccountsEnabled: true` creates the service account; `standardFlowEnabled: false` prevents the client from being used for interactive login. When `use.jwks.url` is true, Keycloak fetches the JWKS endpoint and validates the incoming client assertion against the RSA public key it finds there.
+
+Each service generates its RSA key pair once, stores the private key in `.env` as `PRIVATE_KEY_PEM`, and serves the public key via a `JwksService`:
+
+```python
+class JwksService:
+    def __init__(self) -> None:
+        pem = settings.private_key_pem.replace("\\n", "\n").encode()
+        private_key = load_pem_private_key(pem, password=None)
+        public_key = private_key.public_key()
+        pub_numbers = public_key.public_numbers()
+        der = public_key.public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+        kid = hashlib.sha256(der).hexdigest()[:16]
+        self._jwks = {"keys": [{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid,
+                                "n": self._b64url_int(pub_numbers.n),
+                                "e": self._b64url_int(pub_numbers.e)}]}
+
+    def get_jwks(self) -> dict:
+        return self._jwks
+```
+
+The JWKS is computed once at startup from the private key and cached in the instance. The `kid` is a SHA-256 fingerprint of the DER-encoded public key — stable across restarts for the same key, and different for different keys.
+
+`KeycloakTokenService` builds the client assertion and handles token caching:
 
 ```python
 class KeycloakTokenService:
+    def __init__(self) -> None:
+        pem = settings.private_key_pem.replace("\\n", "\n").encode()
+        self._private_key = load_pem_private_key(pem, password=None)
+        self._access_token: str | None = None
+        self._expires_at: float = 0.0
+        self._lock = asyncio.Lock()
+
     async def get_token(self) -> str:
-        if self._access_token and time.time() < self._expires_at - 30:
+        now = time.time()
+        if self._access_token and now < self._expires_at - _REFRESH_BUFFER_SECONDS:
             return self._access_token
+        async with self._lock:
+            # Re-check inside lock — another coroutine may have refreshed while we waited
+            now = time.time()
+            if self._access_token and now < self._expires_at - _REFRESH_BUFFER_SECONDS:
+                return self._access_token
+            assertion = self._build_assertion()
+            response = await self._request_token(assertion)
+            self._access_token = response["access_token"]
+            self._expires_at = time.time() + response["expires_in"]
+            return self._access_token
+
+    async def _request_token(self, assertion: str) -> dict:
         async with httpx.AsyncClient() as client:
             resp = await client.post(self._token_url, data={
                 "grant_type": "client_credentials",
                 "client_id": self._client_id,
-                "client_secret": self._client_secret,
+                "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                "client_assertion": assertion,
             })
             resp.raise_for_status()
-        data = resp.json()
-        self._access_token = data["access_token"]
-        self._expires_at = time.time() + data["expires_in"]
-        return self._access_token
+        return resp.json()
+
+    def _build_assertion(self) -> str:
+        now = int(time.time())
+        return jwt.encode({
+            "iss": self._client_id, "sub": self._client_id,
+            "aud": self._token_url, "jti": str(uuid.uuid4()),
+            "iat": now, "exp": now + 1800,
+        }, self._private_key, algorithm="RS256")
 ```
 
-The token is cached in memory and refreshed 30 seconds before it expires — one Keycloak round-trip per token lifetime (typically 5 minutes), not per request.
+The `asyncio.Lock` prevents concurrent token fetches when multiple coroutines find an expired token simultaneously. The double-checked re-read after acquiring the lock ensures that if coroutine B waits while A fetches, B returns the token A just cached rather than fetching again.
 
-`McpClient` fetches a fresh (or cached) token and injects it through a minimal `httpx.Auth` subclass. FastMCP's `Client` does not accept a `headers` kwarg — it expects an `httpx.Auth` instance:
+The token is cached for its full 30-minute lifetime and refreshed 30 seconds before expiry — one Keycloak round-trip per token lifetime across all concurrent callers.
+
+`McpClient` injects the token through a minimal `httpx.Auth` subclass. FastMCP's `Client` does not accept a `headers` kwarg — it expects an `httpx.Auth` instance:
 
 ```python
 class _BearerAuth(httpx.Auth):
-    def __init__(self, token: str) -> None:
-        self._token = token
-
     def auth_flow(self, request: httpx.Request):
         request.headers["Authorization"] = f"Bearer {self._token}"
         yield request
@@ -708,7 +762,7 @@ async def call(self, name: str, arguments: dict):
 
 ### Token validation: Keycloak JWKS
 
-The receiving services (mcp-server, ticket-service) validate inbound tokens by fetching Keycloak's public keys. Keycloak exposes a standard JWKS endpoint at `{KEYCLOAK_URL}/realms/{realm}/protocol/openid-connect/certs`. The middleware fetches and caches this:
+The receiving services (mcp-server, ticket-service) validate inbound access tokens by fetching **Keycloak's** public keys — not the caller's JWKS. There are two JWKS endpoints in play: each service's own `/api/.well-known/jwks` (used by Keycloak to validate client assertions during the token request), and Keycloak's `/realms/architect/protocol/openid-connect/certs` (used by receiving services to validate the issued access tokens). The middleware validates access tokens against Keycloak:
 
 ```python
 class JwtMiddleware:
@@ -745,9 +799,7 @@ class JwtMiddleware:
 
 In NestJS (`JwtGuard`), the same logic runs inside `canActivate` using `jose`'s `decodeProtectedHeader`, `importJWK`, and `jwtVerify`.
 
-No private keys are managed per service. Adding a new caller requires only registering a new client in Keycloak — no changes to the receiving services.
-
-### Frontend user login: OIDC Authorization Code Flow with PKCE
+### Frontend user authentication: OIDC Authorization Code Flow with PKCE
 
 The frontend uses a different flow — **Authorization Code Flow with PKCE** — because a human user is being authenticated, not a service. This is OpenID Connect (OIDC): Keycloak acts as the Identity Provider and issues an ID token containing the user's identity claims alongside the access token.
 
@@ -782,19 +834,21 @@ kc.init({ onLoad: "login-required", pkceMethod: "S256" })
 
 `onLoad: 'login-required'` redirects unauthenticated users to Keycloak before the app renders. `pkceMethod: 'S256'` enables PKCE — a code challenge/verifier pair that prevents authorization code interception attacks (essential for public clients). After login, the user's name and email are shown in the sidebar; `kc.logout()` ends the session on Keycloak's side.
 
+The backend's `KeycloakAuthMiddleware` validates inbound browser requests. It reads a `kc_token` cookie set on login, fetches Keycloak's JWKS (5-minute cache), and verifies the RS256 signature and `iss` claim. A `KEYCLOAK_PUBLIC_URL` env var separates the issuer URL used for token validation (`http://localhost:8080`) from the internal URL used for JWKS fetching (`http://keycloak:8080`) — browser-issued tokens carry the public hostname in their `iss` claim, not the Docker-internal one.
+
 The username is included in the `POST /api/chat/new` request body and stored on the `conversations` table, so `GET /api/chat/history?username=...` returns only that user's conversations.
 
 ### Why two different flows
 
-| | Client Credentials | Authorization Code + PKCE |
-|-|-------------------|--------------------------|
+| | Client Credentials + `private_key_jwt` | Authorization Code + PKCE |
+|-|----------------------------------------|--------------------------|
 | **Who** | A service (no user) | A human user |
 | **Flow** | OAuth 2.0 | OIDC (OAuth 2.0 + identity layer) |
+| **Client auth** | RSA private key → JWT assertion | Public client (no secret) |
 | **Token** | Access token only | Access token + ID token |
-| **Client type** | Confidential (has secret) | Public (no secret) |
 | **Use case** | M2M API calls | Interactive browser login |
 
-Client Credentials is strictly OAuth 2.0 — there is no user identity involved and no ID token. Authorization Code with PKCE is OIDC — Keycloak returns an ID token with user claims, making it an Identity Provider, not just a token issuer.
+Client Credentials is strictly OAuth 2.0 — there is no user identity involved and no ID token. Authorization Code with PKCE is OIDC — Keycloak returns an ID token with user claims, making it an Identity Provider, not just a token issuer. Using `private_key_jwt` instead of a shared secret means compromising one service's `.env` does not expose the others — each key pair is independent.
 
 ---
 
@@ -968,7 +1022,7 @@ The `/epic/:id` and `/ticket/:id` Next.js pages fetch the same proxy endpoints a
 
 **`_append_review` over `_annotate_last`.** An early implementation mutated the "Designing solution architecture..." message in place to append the review result. This hid reviewer comments when the loop ran more than once (each review overwrote the last). Appending a separate review message means every iteration of the approval loop is visible in the thinking log — useful for debugging and for user confidence.
 
-**Keycloak as the central Authorization Server for all authentication.** Rather than managing per-service RSA key pairs and WHITELISTED_HOSTS, all token issuance and key management is delegated to Keycloak. Services use OAuth 2.0 Client Credentials to get tokens; Keycloak's JWKS endpoint (`/realms/architect/protocol/openid-connect/certs`) is the single source of truth for public key distribution. The realm configuration is in `infra/keycloak/realm.json` and auto-imported on first start — the complete auth setup is reproducible with no manual steps. Two different flows are used deliberately: Client Credentials for M2M calls (no user identity, access token only), and Authorization Code + PKCE for browser login (OIDC, returns ID token with user claims). Using the wrong flow for the wrong use case — e.g. Client Credentials for a user-facing app — would produce tokens with no user identity and no way to log out a specific user.
+**`private_key_jwt` over shared secrets for M2M authentication.** Each M2M service (ticket-agent, mcp-server, backend) holds its own RSA-2048 private key in `.env` and serves the public key via `/api/.well-known/jwks`. Keycloak is configured with `clientAuthenticatorType: "client-jwt"` and `use.jwks.url: true` — it fetches each service's JWKS endpoint to validate client assertions. This means compromising one service's private key does not expose the others, and rotating a key requires only regenerating the key pair and restarting the service. The alternative — a shared `client_secret` — is a single credential that must be rotated across both Keycloak and the service simultaneously, and its theft gives permanent access until rotated. Two different flows are used deliberately: Client Credentials + `private_key_jwt` for M2M calls (no user identity, access token only), and Authorization Code + PKCE for browser login (OIDC, returns ID token with user claims). Keycloak remains the central Authorization Server — it owns token issuance and the realm-wide JWKS used by receiving services to validate access tokens. The per-service key pairs are only for *client authentication* during the token request, not for signing the issued tokens.
 
 **`_BearerAuth(httpx.Auth)` over `headers=` kwargs.** FastMCP's `Client` does not accept a `headers` kwarg — it uses `httpx` internally and expects an `httpx.Auth` subclass. Implementing `auth_flow` as a one-yield generator is the correct extension point: `yield request` lets `httpx` send the request and handle the response without requiring the auth object to inspect it. The token passed to `_BearerAuth` comes from `KeycloakTokenService.get_token()` — cached in memory, refreshed 30 seconds before expiry.
 

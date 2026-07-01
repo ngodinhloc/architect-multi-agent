@@ -121,24 +121,28 @@ The system is composed of eight services communicating over HTTP, WebSocket, Rab
 | redis | 6379 | — | Redis 7 |
 | postgres-backend | 5432 | — | PostgreSQL 17 |
 | postgres-tickets | 5433 | — | PostgreSQL 17 |
-| keycloak | 8080 | `infra/keycloak/` | Keycloak 26 |
+| keycloak | 8080 | `keycloak/` | Keycloak 26 |
 
 ---
 
 ## Authentication
 
-All authentication is handled by **Keycloak** (port 8080, realm `architect`), configured via `infra/keycloak/realm.json` which is auto-imported on startup.
+All authentication is handled by **Keycloak** (port 8080, realm `architect`), configured via `keycloak/realm.json` which is auto-imported on first startup.
 
-### Service-to-service: OAuth 2.0 Client Credentials Flow
+### Service-to-service: OAuth 2.0 Client Credentials + `private_key_jwt`
 
-Each backend service (ticket-agent, mcp-server, backend) is a confidential Keycloak client with a service account. Before making an outbound call it obtains an RS256 access token from Keycloak's token endpoint using the Client Credentials grant (`grant_type=client_credentials`). The token is cached in memory and refreshed 30 seconds before expiry.
+Each M2M service (ticket-agent, mcp-server, backend) authenticates to Keycloak using the **Client Credentials** grant with **`private_key_jwt`** client authentication (RFC 7523). Rather than a shared secret, each service signs a short-lived JWT assertion with its own RSA-2048 private key. Keycloak fetches the service's own JWKS endpoint to validate the assertion, then issues a 30-minute RS256 access token.
 
-The receiving service (mcp-server, ticket-service) validates the token by:
-1. Fetching Keycloak's public keys from `{KEYCLOAK_URL}/realms/architect/protocol/openid-connect/certs` (cached 5 minutes)
-2. Matching the key by `kid`
-3. Verifying the RS256 signature and `iss` claim
+Each service:
+- Holds its RSA-2048 private key in `.env` as `PRIVATE_KEY_PEM`
+- Serves the corresponding public key as a JWK at `GET /api/.well-known/jwks` (via `JwksService`)
+- Signs a client assertion JWT (`iss=clientId`, `sub=clientId`, `aud=tokenUrl`, unique `jti`, 30-minute `exp`) with RS256
+- Posts the assertion to Keycloak's token endpoint as `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`
+- Caches the resulting access token in memory (30-minute TTL); refreshes 30 seconds before expiry with an `asyncio.Lock` to prevent concurrent fetches
 
-No private keys are managed per service — Keycloak owns the signing keys.
+Keycloak clients are configured with `"clientAuthenticatorType": "client-jwt"` and `"use.jwks.url": "true"` pointing to each service's `/api/.well-known/jwks` endpoint.
+
+The receiving service validates inbound tokens by fetching **Keycloak's** JWKS endpoint (cached 5 minutes), matching by `kid`, and verifying the RS256 signature and `iss` claim.
 
 #### Authentication map
 
@@ -148,9 +152,11 @@ No private keys are managed per service — Keycloak owns the signing keys.
 | mcp-server | ticket-service | Keycloak — `mcp-server` client credentials |
 | backend | ticket-service | Keycloak — `backend` client credentials |
 
-### Frontend user login: OIDC Authorization Code Flow with PKCE
+### Frontend user authentication: OIDC Authorization Code Flow with PKCE
 
 The frontend uses `keycloak-js` with `onLoad: 'login-required'` and `pkceMethod: 'S256'`. On first load, unauthenticated users are redirected to Keycloak's login page. After a successful login, the ID token claims (name, email, username) are available client-side. The `frontend` Keycloak client is a public client (no secret) with `standardFlowEnabled: true` and `redirectUris: ["http://localhost:3000/*"]`.
+
+The backend validates inbound browser requests via `KeycloakAuthMiddleware`, which reads a `kc_token` cookie, fetches **Keycloak's** JWKS endpoint (5-minute cache), and verifies the RS256 signature and `iss` claim. A `KEYCLOAK_PUBLIC_URL` env var is used for the issuer check (browser-issued tokens carry `localhost:8080`, not the internal Docker hostname).
 
 The authenticated username is stored on the `conversations` table when a new chat is created, and used to scope the chat history endpoint (`GET /api/chat/history?username=...`) so each user only sees their own conversations.
 
@@ -577,11 +583,17 @@ Frontend renders FinalReplyCard:
 cp architect-agent/.env.example architect-agent/.env
 # edit architect-agent/.env — set ANTHROPIC_API_KEY=sk-ant-...
 
-# 2. Start all services
+# 2. Generate RSA-2048 key pairs for the three M2M services
+for svc in ticket-agent mcp-server backend; do
+  key=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)
+  echo "PRIVATE_KEY_PEM=\"$key\"" > $svc/.env
+done
+
+# 3. Start all services
 docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000). You will be redirected to Keycloak login automatically. Log in with `dev` / `dev` (the test user pre-configured in `infra/keycloak/realm.json`).
+Open [http://localhost:3000](http://localhost:3000). You will be redirected to Keycloak login automatically. Log in with `dev` / `dev` (the test user pre-configured in `keycloak/realm.json`).
 
 Keycloak admin UI is available at [http://localhost:8080](http://localhost:8080) — username `admin`, password `admin`.
 
@@ -590,5 +602,8 @@ Keycloak admin UI is available at [http://localhost:8080](http://localhost:8080)
 | Key | File | Description |
 |-----|------|-------------|
 | `ANTHROPIC_API_KEY` | `architect-agent/.env` | [console.anthropic.com](https://console.anthropic.com) — shared by both architect-agent and ticket-agent |
+| `PRIVATE_KEY_PEM` | `ticket-agent/.env` | RSA-2048 private key (PEM) for Keycloak `private_key_jwt` client auth |
+| `PRIVATE_KEY_PEM` | `mcp-server/.env` | RSA-2048 private key (PEM) for Keycloak `private_key_jwt` client auth |
+| `PRIVATE_KEY_PEM` | `backend/.env` | RSA-2048 private key (PEM) for Keycloak `private_key_jwt` client auth |
 
-All other service credentials (Keycloak client secrets, database URLs, RabbitMQ URL) are pre-configured in `docker-compose.yml`. Keycloak is auto-configured from `infra/keycloak/realm.json` — no manual setup required.
+All other credentials (database URLs, RabbitMQ URL) are pre-configured in `docker-compose.yml`. Keycloak is auto-configured from `keycloak/realm.json` on first startup — no manual setup required beyond generating the RSA keys above.

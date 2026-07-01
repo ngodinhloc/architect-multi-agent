@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.configs.settings import settings
 from app.container import container
 from app.fast_mcp import fast_mcp, write_tools_to_redis
-from app.routers import health_router
+from app.routers import health_router, jwks_router
 
 
 _STANDARD_LOG_ATTRS = {
@@ -100,4 +100,5 @@ async def log_requests(request: Request, call_next):
 
 
 app.include_router(health_router.router, prefix="/api")
+app.include_router(jwks_router.router, prefix="/api")
 app.mount("/mcp", _mcp_app)
