@@ -7,8 +7,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.configs.settings import settings
+from app.container import container
 from app.fast_mcp import fast_mcp, write_tools_to_redis
-from app.routers import health_router
+from app.routers import health_router, jwks_router
 
 
 _STANDARD_LOG_ATTRS = {
@@ -79,6 +80,11 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def authenticate(request: Request, call_next):
+    return await container.jwt_middleware.handle(request, call_next)
+
+
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
     if request.url.path == "/api/health":
         return await call_next(request)
@@ -93,4 +99,5 @@ async def log_requests(request: Request, call_next):
 
 
 app.include_router(health_router.router, prefix="/api")
+app.include_router(jwks_router.router, prefix="/api")
 app.mount("/mcp", _mcp_app)

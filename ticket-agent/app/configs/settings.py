@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
     cors_origins: str = "http://localhost:3000"
+    private_key_pem: str = ""
+    service_host: str = "http://localhost:8001"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

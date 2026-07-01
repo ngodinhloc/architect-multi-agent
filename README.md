@@ -18,7 +18,7 @@ A **multi-agent AI** system for software architecture planning. Describe a requi
 
 ![architecture](architecture.png)
 
-The system is composed of seven services communicating over HTTP, WebSocket, RabbitMQ, and Redis.
+The system is composed of seven services communicating over HTTP, WebSocket, RabbitMQ, and Redis. Service-to-service calls on the ticket-creation path are authenticated with RS256 JWTs — each service signs its outbound requests with its own RSA private key and the receiving service validates the token by fetching the signer's public key from its JWKS endpoint.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -33,11 +33,12 @@ The system is composed of seven services communicating over HTTP, WebSocket, Rab
                        │ (Next.js proxy)        │ (direct)
 ┌──────────────────────▼───────────────────────▼──────────────────────┐
 │  Backend  (NestJS · port 8000)                                      │
-│  · REST chat API + ticket proxy                                     │
+│  · REST chat API + ticket proxy (RS256 JWT → ticket-service)        │
 │  · WebSocket gateway — polls Redis, pushes chat-update events       │
 │  · PostgreSQL  — persists conversations as MessageInterface[]       │
 │  · Redis       — live chat state during agent processing            │
 │  · Publishes ChatEventInterface to RabbitMQ (fire-and-forget)       │
+│  · GET /api/.well-known/jwks — public key for ticket-service        │
 └────────────┬─────────────────────────────┬───────────────────────────┘
              │ AMQP publish                │ read / write
              │ architecture-agent.chat     │
@@ -83,19 +84,27 @@ The system is composed of seven services communicating over HTTP, WebSocket, Rab
 │                                                                     │
 │  extract_node writes ExtractOut { epicId, ticketIds } to state      │
 │  → FinalReplyInterface written to Redis → agentStatus = hasReplied  │
+│  · GET /api/.well-known/jwks — public key for mcp-server            │
 └────────────┬────────────────────────────────────────────────────────┘
-             │ MCP (streamable HTTP)
-┌────────────▼────────────────┐
-│  MCP Server  (port 8002)    │
-│  create_epic                │
-│  create_ticket              │
-└────────────┬────────────────┘
-             │ REST  /api/epic  /api/ticket
-┌────────────▼────────────────┐
-│  Ticket Service  (port 8003)│
-│  NestJS — epic + ticket     │
-│  CRUD backed by PostgreSQL  │
-└─────────────────────────────┘
+             │ MCP (streamable HTTP) · Authorization: Bearer <RS256 JWT>
+┌────────────▼─────────────────────────────────┐
+│  MCP Server  (port 8002)                     │
+│  create_epic / create_ticket                 │
+│  · JWT middleware — validates RS256 JWT,     │
+│    checks issuer against WHITELISTED_HOSTS,  │
+│    fetches & caches JWKS from issuer         │
+│  · GET /api/.well-known/jwks — public key    │
+│    for ticket-service                        │
+└────────────┬─────────────────────────────────┘
+             │ REST  /api/epic  /api/ticket · Authorization: Bearer <RS256 JWT>
+┌────────────▼─────────────────────────────────┐
+│  Ticket Service  (port 8003)                 │
+│  NestJS — epic + ticket                      │
+│  · JWT guard — validates RS256 JWT,          │
+│    checks issuer against WHITELISTED_HOSTS,  │
+│    fetches & caches JWKS from issuer         │
+│  · CRUD backed by PostgreSQL                 │
+└──────────────────────────────────────────────┘
 ```
 
 ---
@@ -114,6 +123,55 @@ The system is composed of seven services communicating over HTTP, WebSocket, Rab
 | redis | 6379 | — | Redis 7 |
 | postgres-backend | 5432 | — | PostgreSQL 17 |
 | postgres-tickets | 5433 | — | PostgreSQL 17 |
+
+---
+
+## Service-to-Service Authentication
+
+All HTTP calls on the ticket-creation path — ticket-agent → mcp-server, mcp-server → ticket-service, and backend → ticket-service — are authenticated using RS256 JWTs following the OIDC service-identity pattern.
+
+### How it works
+
+Each service that initiates outbound calls has its own RSA-2048 key pair. The private key is stored in the service's `.env` file (`PRIVATE_KEY_PEM`). The public key is exposed via a JWKS endpoint at `GET /api/.well-known/jwks`.
+
+On every outbound request, the caller signs a short-lived JWT (5-minute expiry) with:
+- `iss` — the caller's own base URL (`SERVICE_HOST`)
+- `aud` — the recipient's base URL
+- `kid` — a stable key ID derived from the SHA-256 of the public key modulus
+
+The recipient validates the token by:
+1. Extracting `iss` from the decoded (unverified) payload
+2. Checking `iss` against the `WHITELISTED_HOSTS` environment variable (comma-separated)
+3. Fetching the caller's JWKS from `{iss}/api/.well-known/jwks` (cached for 5 minutes)
+4. Finding the matching key by `kid` and verifying the RS256 signature and audience claim
+
+Unauthenticated requests return **401**. Requests from non-whitelisted issuers return **403**.
+
+### Authentication map
+
+| Caller | Recipient | Caller signs with | Recipient validates via |
+|--------|-----------|------------------|------------------------|
+| ticket-agent | mcp-server | `ticket-agent` private key | `ticket-agent/api/.well-known/jwks` |
+| mcp-server | ticket-service | `mcp-server` private key | `mcp-server/api/.well-known/jwks` |
+| backend | ticket-service | `backend` private key | `backend/api/.well-known/jwks` |
+
+### Key generation
+
+Each service needs its own RSA key pair. Generate with:
+
+```bash
+# ticket-agent
+openssl genrsa 2048 | awk 'NF {printf "%s\\n", $0}' | sed 's/\\n$//' > /tmp/ta_key
+echo "PRIVATE_KEY_PEM=\"$(cat /tmp/ta_key)\"" >> ticket-agent/.env
+
+# mcp-server
+openssl genrsa 2048 | awk 'NF {printf "%s\\n", $0}' | sed 's/\\n$//' > /tmp/mcp_key
+echo "PRIVATE_KEY_PEM=\"$(cat /tmp/mcp_key)\"" >> mcp-server/.env
+
+# backend
+openssl genrsa 2048 | awk 'NF {printf "%s\\n", $0}' | sed 's/\\n$//' > /tmp/be_key
+echo "PRIVATE_KEY_PEM=\"$(cat /tmp/be_key)\"" >> backend/.env
+```
 
 ---
 
@@ -146,10 +204,11 @@ The system is composed of seven services communicating over HTTP, WebSocket, Rab
 
 ### Ticket Proxy
 
-Proxies the browser to the internal ticket-service (not directly reachable from the browser).
+Proxies the browser to the internal ticket-service (not directly reachable from the browser). Each proxy request is signed with an RS256 JWT before forwarding — the backend's `JwtService` signs the token and the `TicketProxyController` includes it as an `Authorization: Bearer` header.
 
 | Method | Path | Proxies to |
 |--------|------|------------|
+| `GET` | `/api/.well-known/jwks` | Returns backend public key (used by ticket-service for JWT validation) |
 | `GET` | `/api/epic/:id` | `ticket-service /api/epic/:id` |
 | `GET` | `/api/epic/:epicId/tickets` | `ticket-service /api/epic/:epicId/tickets` |
 | `GET` | `/api/ticket/:id` | `ticket-service /api/ticket/:id` |
@@ -270,6 +329,8 @@ On startup, `McpToolBuilder` reads `mcp_tools` from Redis and dynamically create
 | `create_epic` | `mcp_tools` Redis key | Calls MCP `create_epic` → ticket-service `POST /api/epic/` |
 | `create_ticket` | `mcp_tools` Redis key | Calls MCP `create_ticket` → ticket-service `POST /api/ticket/` |
 
+`McpClient` authenticates each MCP call by signing a short-lived RS256 JWT (via `JwtService`) and passing it through a `_BearerAuth` adapter — FastMCP's `Client` accepts an `httpx.Auth` instance, not raw headers.
+
 After `extract_node` writes `ExtractOut` to state, `TicketService` reads it directly to build `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied` — which the backend WebSocket gateway delivers to the browser.
 
 ---
@@ -277,6 +338,10 @@ After `extract_node` writes `ExtractOut` to state, `TicketService` reads it dire
 ## MCP Server (port 8002)
 
 Exposes two tools via MCP protocol (streamable HTTP at `POST /mcp/`). Translates AI tool calls into REST calls to the ticket-service.
+
+Incoming requests to `POST /mcp/` pass through a **JWT middleware** that validates the caller's RS256 token. The middleware extracts the issuer from the token, checks it against `WHITELISTED_HOSTS`, fetches and caches the issuer's JWKS, and verifies the signature. Outbound REST calls to ticket-service include an RS256 JWT signed by the mcp-server's own key.
+
+The server also exposes `GET /api/.well-known/jwks` so the ticket-service can fetch the mcp-server's public key for validation.
 
 On startup, serialises the full tools spec into Redis under the key `mcp_tools` in the following shape:
 
@@ -447,6 +512,8 @@ Content-Type: application/json
 
 Minimal NestJS CRUD service backed by its own PostgreSQL instance. No RabbitMQ, no Redis, no WebSocket.
 
+All endpoints except `/api/health` are protected by a global **JWT guard** (`JwtGuard`). The guard validates the RS256 JWT on every request: it checks the issuer against `WHITELISTED_HOSTS`, fetches and caches the issuer's JWKS (5-minute TTL), and verifies the signature and audience claim. Unauthenticated requests return 401; requests from non-whitelisted issuers return 403.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/epic/` | Create epic |
@@ -454,7 +521,7 @@ Minimal NestJS CRUD service backed by its own PostgreSQL instance. No RabbitMQ, 
 | `POST` | `/api/ticket/` | Create ticket |
 | `GET` | `/api/epic/:epicId/tickets` | Get all tickets for an epic |
 | `GET` | `/api/ticket/:id` | Get ticket by id |
-| `GET` | `/api/health` | Health check |
+| `GET` | `/api/health` | Health check (no auth required) |
 
 ---
 
@@ -541,3 +608,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | Key | File | Description |
 |-----|------|-------------|
 | `ANTHROPIC_API_KEY` | `architect-agent/.env` | [console.anthropic.com](https://console.anthropic.com) — shared by both architect-agent and ticket-agent |
+| `PRIVATE_KEY_PEM` | `ticket-agent/.env` | RSA-2048 private key (PKCS#8, newlines as `\n`) — signs JWTs for mcp-server calls |
+| `PRIVATE_KEY_PEM` | `mcp-server/.env` | RSA-2048 private key — signs JWTs for ticket-service calls |
+| `PRIVATE_KEY_PEM` | `backend/.env` | RSA-2048 private key — signs JWTs for ticket-service proxy calls |
+
+`SERVICE_HOST` and `WHITELISTED_HOSTS` for each service are pre-set in `docker-compose.yml`. See the **Service-to-Service Authentication** section above for key generation commands.

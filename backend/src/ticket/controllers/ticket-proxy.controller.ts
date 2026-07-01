@@ -1,28 +1,37 @@
 import { Controller, Get, Param, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { JwtService } from '../../auth/jwt/jwt.service';
 
 const TICKET_SERVICE_URL = process.env.TICKET_SERVICE_URL ?? 'http://localhost:8003';
 
-async function proxyGet(url: string, notFoundMsg?: string) {
-  const res = await fetch(url);
-  if (res.status === 404) throw new NotFoundException(notFoundMsg ?? 'Not found');
-  if (!res.ok) throw new InternalServerErrorException('Ticket service error');
-  return res.json();
-}
-
 @Controller('api')
 export class TicketProxyController {
+  constructor(private readonly jwtService: JwtService) {}
+
+  @Get('.well-known/jwks')
+  getJwks() {
+    return this.jwtService.getJwks();
+  }
+
   @Get('epic/:id')
-  getEpic(@Param('id') id: string) {
-    return proxyGet(`${TICKET_SERVICE_URL}/api/epic/${id}`, `Epic ${id} not found`);
+  async getEpic(@Param('id') id: string) {
+    return this.proxyGet(`${TICKET_SERVICE_URL}/api/epic/${id}`, `Epic ${id} not found`);
   }
 
   @Get('epic/:epicId/tickets')
-  getEpicTickets(@Param('epicId') epicId: string) {
-    return proxyGet(`${TICKET_SERVICE_URL}/api/epic/${epicId}/tickets`);
+  async getEpicTickets(@Param('epicId') epicId: string) {
+    return this.proxyGet(`${TICKET_SERVICE_URL}/api/epic/${epicId}/tickets`);
   }
 
   @Get('ticket/:id')
-  getTicket(@Param('id') id: string) {
-    return proxyGet(`${TICKET_SERVICE_URL}/api/ticket/${id}`, `Ticket ${id} not found`);
+  async getTicket(@Param('id') id: string) {
+    return this.proxyGet(`${TICKET_SERVICE_URL}/api/ticket/${id}`, `Ticket ${id} not found`);
+  }
+
+  private async proxyGet(url: string, notFoundMsg?: string) {
+    const token = await this.jwtService.sign();
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 404) throw new NotFoundException(notFoundMsg ?? 'Not found');
+    if (!res.ok) throw new InternalServerErrorException('Ticket service error');
+    return res.json();
   }
 }

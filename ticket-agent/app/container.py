@@ -4,6 +4,7 @@ from langchain_anthropic import ChatAnthropic
 from app.agent.ticket_graph import TicketGraph
 from app.agent.tools.mcp_client import McpClient
 from app.agent.tools.mcp_tool_builder import McpToolBuilder
+from app.auth.jwt_service import JwtService
 from app.configs.event_configs import EventHandlerMap, ACCEPT_EVENT_NAME
 from app.configs.settings import settings
 from app.events.handlers.accept_event_handler import AcceptEventHandler
@@ -31,10 +32,14 @@ class Container:
         return RedisClient().get()
 
     @cached_property
+    def jwt_service(self) -> JwtService:
+        return JwtService()
+
+    @cached_property
     def mcp_tool_builder(self) -> McpToolBuilder:
         return McpToolBuilder(
             redis_client=self.redis_client,
-            mcp_client_factory=lambda host: McpClient(host),
+            mcp_client_factory=lambda host: McpClient(host, self.jwt_service),
         )
 
     @cached_property
