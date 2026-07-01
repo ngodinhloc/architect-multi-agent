@@ -4,8 +4,9 @@ import { DatabaseModule } from './database/database.module';
 import { EpicModule } from './epic/epic.module';
 import { TicketModule } from './ticket/ticket.module';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, EpicModule, TicketModule, HealthModule],
+  imports: [AuthModule, DatabaseModule, EpicModule, TicketModule, HealthModule, MetricsModule],
 })
 export class AppModule {}

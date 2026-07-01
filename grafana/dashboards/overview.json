@@ -1,0 +1,149 @@
+{
+  "title": "Architect Multi-Agent Overview",
+  "uid": "architect-overview",
+  "version": 1,
+  "schemaVersion": 36,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Backend",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "title": "Chat API requests/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 1, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(backend_chat_requests_total[1m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 3,
+      "title": "Events published/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 1, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(backend_events_published_total[1m])",
+          "legendFormat": "published"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Architect Agent",
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "title": "Events consumed/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(architect_agent_events_consumed_total[1m])",
+          "legendFormat": "consumed"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 12,
+      "title": "LLM requests/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(architect_agent_llm_requests_total[1m])) by (node)",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Ticket Agent",
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "title": "Events consumed/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(ticket_agent_events_consumed_total[1m])",
+          "legendFormat": "consumed"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 22,
+      "title": "LLM requests/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(ticket_agent_llm_requests_total[1m])) by (node)",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Ticket Service",
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "title": "API requests/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(ticket_service_requests_total[1m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "MCP Server",
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "title": "Tool requests/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 37, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(mcp_server_tool_requests_total[1m])) by (tool)",
+          "legendFormat": "{{tool}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    }
+  ]
+}

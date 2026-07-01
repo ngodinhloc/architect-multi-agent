@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import * as amqp from 'amqplib';
 import type { ChatEventInterface } from '../contracts/chat-event.interface';
 import { CHAT_EVENT_NAME } from '../contracts/chat-event.interface';
+import { MetricsService } from '../../metrics/metrics.service';
 
 const EXCHANGE = 'architect-events';
 const QUEUE = 'architecture-agent.chat';
@@ -12,6 +13,8 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RabbitMQService.name);
   private connection: amqp.ChannelModel | null = null;
   private channel: amqp.Channel | null = null;
+
+  constructor(private readonly metricsService: MetricsService) {}
 
   async onModuleInit() {
     const url = process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672/';
@@ -47,6 +50,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.channel.publish(EXCHANGE, ROUTING_KEY, Buffer.from(JSON.stringify(event)), { persistent: true });
+    this.metricsService.eventsPublished.inc();
     this.logger.log('RabbitMQService.publish: Published', { conversationId: event.data.conversationId, exchange: EXCHANGE });
   }
 }

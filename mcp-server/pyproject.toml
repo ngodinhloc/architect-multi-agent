@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "redis>=5.0",
     "PyJWT[crypto]>=2.8",
+    "prometheus-client>=0.20",
 ]
 
 [tool.setuptools.packages.find]

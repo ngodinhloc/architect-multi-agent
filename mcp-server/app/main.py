@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import make_asgi_app
 from app.configs.settings import settings
 from app.container import container
 from app.fast_mcp import fast_mcp, write_tools_to_redis
@@ -102,3 +103,4 @@ async def log_requests(request: Request, call_next):
 app.include_router(health_router.router, prefix="/api")
 app.include_router(jwks_router.router, prefix="/api")
 app.mount("/mcp", _mcp_app)
+app.mount("/metrics", make_asgi_app())

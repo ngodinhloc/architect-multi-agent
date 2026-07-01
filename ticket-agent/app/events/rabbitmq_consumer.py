@@ -3,6 +3,7 @@ import logging
 import aio_pika
 from app.configs.event_configs import EXCHANGE_NAME, ACCEPT_EVENT_NAME, ACCEPT_QUEUE
 from app.events.message_processor import MessageProcessor
+from app.metrics import events_consumed
 
 
 class RabbitMQConsumer:
@@ -38,4 +39,5 @@ class RabbitMQConsumer:
         async with queue.iterator() as messages:
             async for message in messages:
                 async with message.process():
+                    events_consumed.inc()
                     await self._message_processor.process(message)

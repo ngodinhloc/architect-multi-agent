@@ -4,6 +4,7 @@ from fastmcp import FastMCP
 from redis.asyncio import Redis
 from app.configs.settings import settings
 from app.container import container
+from app.metrics import tool_requests
 
 logger = logging.getLogger(__name__)
 
@@ -13,12 +14,14 @@ fast_mcp = FastMCP("Architect MCP Server")
 @fast_mcp.tool()
 async def create_epic(epic: dict) -> dict:
     """Create an epic in the ticket service. Pass the full EpicInterface object as a dict."""
+    tool_requests.labels(tool="create_epic").inc()
     return await container.epic_tool.create(epic)
 
 
 @fast_mcp.tool()
 async def create_ticket(ticket: dict) -> dict:
     """Create a ticket in the ticket service. Pass the full TicketInterface object as a dict."""
+    tool_requests.labels(tool="create_ticket").inc()
     return await container.ticket_tool.create(ticket)
 
 

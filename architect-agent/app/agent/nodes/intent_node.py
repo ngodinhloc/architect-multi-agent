@@ -6,6 +6,7 @@ from app.contracts.chat_interface import NodeName, ReplyInterface, UserIntent
 from app.agent.schemas.intent_schema import IntentOut
 from app.agent.templates.intent_templates import INTENT_PERSONA, INTENT_PROMPT
 from app.events.rabbitmq_publisher import RabbitMQPublisher
+from app.metrics import llm_requests
 
 ACCEPT_QUEUE = "architecture-agent.accept"
 ACCEPT_EVENT_NAME = "architecture-agent.accept"
@@ -27,6 +28,7 @@ class IntentNode:
         )
 
         prompt = INTENT_PROMPT.format(user_text=user_text, has_prior_plan=has_prior_plan)
+        llm_requests.labels(node="intent").inc()
         result: IntentOut = await self._llm.ainvoke([SystemMessage(content=INTENT_PERSONA), HumanMessage(content=prompt)])
 
         if result.intent == UserIntent.undefined:

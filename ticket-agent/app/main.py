@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from aiormq.exceptions import ConnectionClosed
+from prometheus_client import make_asgi_app
 from app.configs.settings import settings
 from app.container import container
 from app.routers import health_router, jwks_router
@@ -93,3 +94,4 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(health_router.router, prefix="/api")
 app.include_router(jwks_router.router, prefix="/api")
+app.mount("/metrics", make_asgi_app())

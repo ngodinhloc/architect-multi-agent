@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.agent.contracts.agent_interface import ArchitectState
 from app.agent.schemas.plan_review_schema import PlanReviewOut
 from app.agent.templates.plan_review_templates import PLAN_REVIEW_PERSONA, PLAN_REVIEW_PROMPT
+from app.metrics import llm_requests
 
 
 class PlanReviewNode:
@@ -19,6 +20,7 @@ class PlanReviewNode:
             solution=json.dumps(solution.model_dump() if solution else {}, indent=2),
             tickets=json.dumps([t.model_dump() for t in tickets], indent=2),
         )
+        llm_requests.labels(node="plan_review").inc()
         result: PlanReviewOut = await self._llm.ainvoke([SystemMessage(content=PLAN_REVIEW_PERSONA), HumanMessage(content=prompt)])
 
         return {

@@ -12,13 +12,18 @@ import { Request } from 'express';
 import { ChatService } from '../services/chat.service';
 import { NewChatDto } from '../dto/new-chat.dto';
 import { ContinueChatDto } from '../dto/continue-chat.dto';
+import { MetricsService } from '../../metrics/metrics.service';
 
 @Controller('api/chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly metricsService: MetricsService,
+  ) {}
 
   @Post('new')
   newChat(@Req() req: Request, @Body() dto: NewChatDto): Promise<{ id: string }> {
+    this.metricsService.chatRequests.inc({ endpoint: 'new' });
     return this.chatService.newChat(dto.message, req.user?.username);
   }
 
@@ -28,6 +33,7 @@ export class ChatController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ContinueChatDto,
   ): Promise<{ accepted: true }> {
+    this.metricsService.chatRequests.inc({ endpoint: 'cont' });
     return this.chatService.continueChat(id, dto.message);
   }
 

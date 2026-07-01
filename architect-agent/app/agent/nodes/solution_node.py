@@ -3,6 +3,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.agent.contracts.agent_interface import ArchitectState
 from app.agent.schemas.solution_schema import SolutionOut
+from app.metrics import llm_requests
 from app.agent.templates.solution_templates import SOLUTION_PERSONA, SOLUTION_PROMPT_NEW, SOLUTION_PROMPT_REFINE, SOLUTION_PROMPT_REVISE
 from app.contracts.chat_interface import SolutionInterface
 
@@ -17,6 +18,7 @@ class SolutionNode:
         prior_solution = state.get("prior_solution")
 
         prompt = self._build_prompt(state, requirement, comments, prior_solution)
+        llm_requests.labels(node="solution").inc()
         result: SolutionOut = await self._llm.ainvoke([SystemMessage(content=SOLUTION_PERSONA), HumanMessage(content=prompt)])
         return {"solution": SolutionInterface(**result.model_dump()), "solution_approved": False}
 
