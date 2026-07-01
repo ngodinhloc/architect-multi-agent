@@ -8,7 +8,8 @@ The focus is on the decisions that make this work in practice:
 - How to carry conversation context across turns for the refine flow
 - How to hand off between two independent services using RabbitMQ
 - How to build a two-node ticket agent with a tool-calling loop and a structured extraction step
-- How to authenticate service-to-service calls with RS256 JWTs and JWKS public key distribution
+- How to authenticate service-to-service calls with OAuth 2.0 Client Credentials via Keycloak
+- How to add user login with OpenID Connect (OIDC) Authorization Code Flow and PKCE
 - How to stream per-node progress to the browser in real time
 
 ![Screenshot 0](./screenshot_0.png)
@@ -27,19 +28,21 @@ The focus is on the decisions that make this work in practice:
 
 ![Architecture diagram](./architecture.png)
 
-**Frontend** (Next.js 15, port 3000) — requirement input, live thinking log, plan card, and final reply. Opens a WebSocket and receives real-time `chat-update` events as each agent node runs. Accepted plans link to `/epic/:id` and `/ticket/:id` detail pages served by dedicated Next.js routes.
+**Frontend** (Next.js 16, port 3000) — requirement input, live thinking log, plan card, and final reply. Opens a WebSocket and receives real-time `chat-update` events as each agent node runs. Accepted plans link to `/epic/:id` and `/ticket/:id` detail pages served by dedicated Next.js routes. Uses `keycloak-js` for user authentication (OIDC Authorization Code Flow + PKCE) — unauthenticated users are redirected to Keycloak login automatically. The logged-in user's name and email are shown in the sidebar, and conversation history is scoped to that user.
 
-**Backend** (NestJS 11, port 8000) — REST chat API and ticket proxy. Creates conversations in PostgreSQL, manages live state in Redis, publishes `ChatEvent` to RabbitMQ, and drives the WebSocket gateway. Also proxies `/api/epic/*` and `/api/ticket/*` to the ticket-service so the browser never calls the internal service directly.
+**Backend** (NestJS 11, port 8000) — REST chat API and ticket proxy. Creates conversations in PostgreSQL (stores `username` from the authenticated user), manages live state in Redis, publishes `ChatEvent` to RabbitMQ, and drives the WebSocket gateway. Also proxies `/api/epic/*` and `/api/ticket/*` to the ticket-service — each proxy request includes a Keycloak access token obtained via the `backend` client credentials.
+
+**Keycloak** (port 8080, realm `architect`) — central Authorization Server for all authentication. Manages two types of clients: confidential M2M clients (`ticket-agent`, `mcp-server`, `backend`) that use the OAuth 2.0 Client Credentials flow to obtain access tokens for service-to-service calls, and the public `frontend` OIDC client that uses Authorization Code + PKCE for browser user login. Issues RS256-signed JWTs; services validate tokens by fetching Keycloak's JWKS endpoint. The entire realm configuration is in `infra/keycloak/realm.json` and auto-imported on startup.
 
 **RabbitMQ** — two durable queues: `architecture-agent.chat` (backend → architect-agent) and `architecture-agent.accept` (architect-agent → ticket-agent). Both publishers return immediately; consumers process independently.
 
 **Architect Agent** (FastAPI + LangGraph, port 8001) — subscribes to `architecture-agent.chat`, runs the directed approval-loop graph, and writes progress to Redis after every node. On accept intent, publishes an `AcceptEvent` to `architecture-agent.accept` instead of creating tickets itself.
 
-**Ticket Agent** (FastAPI + LangGraph, port 8004) — subscribes to `architecture-agent.accept` and runs a two-node `StateGraph`. On startup, reads the `mcp_tools` key from Redis and dynamically builds `StructuredTool` instances via `McpToolBuilder`. `create_node` drives a tool-calling loop (`create_epic` → `create_ticket` × N), then `extract_node` reads the tool results and writes `ExtractOut { epicId, ticketIds }` to state. `TicketService` converts this into `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied`.
+**Ticket Agent** (FastAPI + LangGraph, port 8004) — subscribes to `architecture-agent.accept` and runs a two-node `StateGraph`. On startup, reads the `mcp_tools` key from Redis and dynamically builds `StructuredTool` instances via `McpToolBuilder`. `create_node` drives a tool-calling loop (`create_epic` → `create_ticket` × N), then `extract_node` reads the tool results and writes `ExtractOut { epicId, ticketIds }` to state. `TicketService` converts this into `FinalReplyInterface`, writes it to Redis, and sets `agentStatus = hasReplied`. Before each MCP call, `KeycloakTokenService` obtains a Keycloak access token using the `ticket-agent` client credentials.
 
-**MCP Server** (FastMCP + FastAPI, port 8002) — exposes `create_epic` and `create_ticket` over the MCP protocol. On startup, serialises the tools spec (name, description, inputSchema, providerHost) into Redis under `mcp_tools` so consumers can discover tools without hardcoding them. The ticket-agent calls tools via `McpClient`; the MCP server translates the calls into REST requests to the ticket-service.
+**MCP Server** (FastMCP + FastAPI, port 8002) — exposes `create_epic` and `create_ticket` over the MCP protocol. On startup, serialises the tools spec (name, description, inputSchema, providerHost) into Redis under `mcp_tools` so consumers can discover tools without hardcoding them. Inbound MCP requests are authenticated by a JWT middleware that validates the Keycloak-issued token against Keycloak's JWKS endpoint. Outbound REST calls to ticket-service include a Keycloak token obtained via the `mcp-server` client credentials.
 
-**Ticket Service** (NestJS 11, port 8003) — minimal CRUD service backed by its own PostgreSQL instance. No RabbitMQ, no Redis, no WebSocket.
+**Ticket Service** (NestJS 11, port 8003) — minimal CRUD service backed by its own PostgreSQL instance. No RabbitMQ, no Redis, no WebSocket. All endpoints (except `/api/health`) are protected by a global `JwtGuard` that validates Keycloak-issued RS256 tokens against Keycloak's JWKS endpoint.
 
 ---
 
@@ -488,11 +491,11 @@ async def write_tools_to_redis() -> None:
 
 The `providerHost` stored in the spec is what `McpToolBuilder` uses to construct the `McpClient` per provider — the ticket-agent never hardcodes the MCP server URL.
 
-`McpClient` wraps FastMCP's `Client` over streamable HTTP. Each call signs a fresh RS256 JWT and passes it via a `_BearerAuth` adapter (FastMCP's `Client` does not accept raw headers — see Step 8). The response is always read from `content[0].text` — FastMCP serialises the return value there regardless of type:
+`McpClient` wraps FastMCP's `Client` over streamable HTTP. Each call fetches a Keycloak access token (cached) and passes it via a `_BearerAuth` adapter (FastMCP's `Client` does not accept raw headers — see Step 8). The response is always read from `content[0].text` — FastMCP serialises the return value there regardless of type:
 
 ```python
 async def call(self, name: str, arguments: dict):
-    token = self._jwt_service.sign()
+    token = await self._keycloak_token_service.get_token()
     async with Client(self._url, auth=_BearerAuth(token)) as client:
         result = await client.call_tool(name, arguments)
         if result.content and isinstance(result.content[0], TextContent):
@@ -643,46 +646,69 @@ Content-Type: application/json
 
 ---
 
-## Step 8 — Service-to-Service Authentication with RS256 JWTs
+## Step 8 — Authentication with Keycloak: OAuth 2.0 and OIDC
 
-The ticket-creation path crosses three service boundaries: ticket-agent → mcp-server, mcp-server → ticket-service, and backend → ticket-service. Without authentication, any process on the internal Docker network can call these endpoints. The chosen pattern is **OIDC-style service identity**: each caller signs a short-lived JWT with its own RSA private key; the recipient validates the token by fetching the caller's public key from a well-known JWKS endpoint.
+The ticket-creation path crosses three service boundaries: ticket-agent → mcp-server, mcp-server → ticket-service, and backend → ticket-service. The frontend also needs to identify who is using the app. Both problems are solved with **Keycloak** as the central Authorization Server — but with different OAuth 2.0 flows for each case.
 
-### Why asymmetric keys over a shared secret
+### Service-to-service: OAuth 2.0 Client Credentials Flow
 
-A shared API key works across two services. Across three services that each need to identify themselves differently, it creates a coupling problem: changing one key requires coordinating restarts across multiple services. With asymmetric keys, each service has its own key pair — the private key never leaves the service, and the public key is self-served on a standard endpoint. Adding a new service to the chain requires only adding its URL to the recipient's `WHITELISTED_HOSTS`.
+Machine-to-machine calls use the **Client Credentials** grant (`grant_type=client_credentials`). This is the standard OAuth 2.0 flow for services that act on their own behalf, with no user involved. Each service is registered in Keycloak as a confidential client with a service account:
 
-### The pattern: sign, expose, verify
-
-Every service that initiates outbound calls on the ticket path implements the same three-part contract:
-
-**Signer (`JwtService`)** — generates a 5-minute RS256 JWT with `iss = SERVICE_HOST`, `aud = recipient URL`, and a `kid` derived from the SHA-256 of the public key modulus. In Python:
-
-```python
-class JwtService:
-    def sign(self) -> str:
-        now = int(time.time())
-        payload = {"iss": settings.service_host, "aud": settings.mcp_server_url,
-                   "iat": now, "exp": now + 300}
-        return jwt.encode(payload, self._private_key, algorithm="RS256",
-                          headers={"kid": self._kid})
-
-    def get_jwks(self) -> dict:
-        pub = self._private_key.public_key()
-        numbers = pub.public_numbers()
-        return {"keys": [{"kty": "RSA", "use": "sig", "alg": "RS256",
-                          "kid": self._kid, "n": _b64url(numbers.n), "e": _b64url(numbers.e)}]}
+```json
+{
+  "clientId": "ticket-agent",
+  "publicClient": false,
+  "serviceAccountsEnabled": true,
+  "standardFlowEnabled": false,
+  "secret": "ticket-agent-secret"
+}
 ```
 
-**JWKS endpoint** — a public `GET /api/.well-known/jwks` route on every signing service returns the RSA public key in JWK format. No authentication is required on this endpoint — it is intentionally public, like any OIDC provider's discovery endpoint.
+`serviceAccountsEnabled: true` creates the service account; `standardFlowEnabled: false` prevents the client from being used for interactive user login. The token endpoint call is straightforward:
 
-**Verifier (middleware / guard)** — on every protected request, the recipient:
-1. Extracts the `iss` claim from the unverified token header
-2. Checks `iss` against the `WHITELISTED_HOSTS` env var — returns 403 if not listed
-3. Fetches the JWKS from `{iss}/api/.well-known/jwks` (5-minute in-memory cache per issuer)
-4. Finds the key matching the token's `kid`
-5. Verifies the RS256 signature and the `aud` claim
+```python
+class KeycloakTokenService:
+    async def get_token(self) -> str:
+        if self._access_token and time.time() < self._expires_at - 30:
+            return self._access_token
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(self._token_url, data={
+                "grant_type": "client_credentials",
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+            })
+            resp.raise_for_status()
+        data = resp.json()
+        self._access_token = data["access_token"]
+        self._expires_at = time.time() + data["expires_in"]
+        return self._access_token
+```
 
-In Python (Starlette middleware):
+The token is cached in memory and refreshed 30 seconds before it expires — one Keycloak round-trip per token lifetime (typically 5 minutes), not per request.
+
+`McpClient` fetches a fresh (or cached) token and injects it through a minimal `httpx.Auth` subclass. FastMCP's `Client` does not accept a `headers` kwarg — it expects an `httpx.Auth` instance:
+
+```python
+class _BearerAuth(httpx.Auth):
+    def __init__(self, token: str) -> None:
+        self._token = token
+
+    def auth_flow(self, request: httpx.Request):
+        request.headers["Authorization"] = f"Bearer {self._token}"
+        yield request
+
+async def call(self, name: str, arguments: dict):
+    token = await self._keycloak_token_service.get_token()
+    async with Client(self._url, auth=_BearerAuth(token)) as client:
+        result = await client.call_tool(name, arguments)
+        ...
+```
+
+`auth_flow` is a generator — `yield request` hands the modified request to the transport; `httpx` drives the response cycle without requiring a second yield.
+
+### Token validation: Keycloak JWKS
+
+The receiving services (mcp-server, ticket-service) validate inbound tokens by fetching Keycloak's public keys. Keycloak exposes a standard JWKS endpoint at `{KEYCLOAK_URL}/realms/{realm}/protocol/openid-connect/certs`. The middleware fetches and caches this:
 
 ```python
 class JwtMiddleware:
@@ -695,69 +721,80 @@ class JwtMiddleware:
             return JSONResponse({"detail": "Missing token"}, status_code=401)
 
         token = auth[7:]
-        unverified = jwt.decode(token, options={"verify_signature": False})
-        issuer = unverified.get("iss", "")
-
-        if issuer not in settings.whitelisted_hosts_list:
-            return JSONResponse({"detail": "Issuer not authorized"}, status_code=403)
-
-        keys = await self._fetch_jwks(issuer)
+        keys = await self._fetch_keycloak_jwks()
         header = jwt.get_unverified_header(token)
-        jwk = next((k for k in keys if k["kid"] == header.get("kid")), None)
+        jwk = next((k for k in keys if k.get("kid") == header.get("kid")), None)
         if not jwk:
             return JSONResponse({"detail": "No matching key"}, status_code=401)
 
         public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
-        jwt.decode(token, public_key, algorithms=["RS256"], audience=settings.service_host)
+        jwt.decode(token, public_key, algorithms=["RS256"],
+                   options={"verify_aud": False})
         return await call_next(request)
 
-    async def _fetch_jwks(self, issuer: str) -> list[dict]:
-        cached = self._cache.get(issuer)
-        if cached and time.time() - cached["at"] < 300:
-            return cached["keys"]
+    async def _fetch_keycloak_jwks(self) -> list[dict]:
+        if self._jwks_cache and time.time() - self._jwks_fetched_at < 300:
+            return self._jwks_cache
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{issuer}/api/.well-known/jwks")
+            r = await client.get(self._jwks_url)
             r.raise_for_status()
-        keys = r.json()["keys"]
-        self._cache[issuer] = {"keys": keys, "at": time.time()}
-        return keys
+        self._jwks_cache = r.json()["keys"]
+        self._jwks_fetched_at = time.time()
+        return self._jwks_cache
 ```
 
-In NestJS (`JwtGuard`), the same logic runs inside `canActivate` using `jose`'s `decodeJwt`, `decodeProtectedHeader`, `importJWK`, and `jwtVerify`.
+In NestJS (`JwtGuard`), the same logic runs inside `canActivate` using `jose`'s `decodeProtectedHeader`, `importJWK`, and `jwtVerify`.
 
-### Injecting the token into FastMCP's Client
+No private keys are managed per service. Adding a new caller requires only registering a new client in Keycloak — no changes to the receiving services.
 
-FastMCP's `Client` does not accept a `headers` kwarg — it uses `httpx` internally and expects an `httpx.Auth` instance. The solution is a minimal `Auth` subclass:
+### Frontend user login: OIDC Authorization Code Flow with PKCE
 
-```python
-class _BearerAuth(httpx.Auth):
-    def __init__(self, token: str) -> None:
-        self._token = token
+The frontend uses a different flow — **Authorization Code Flow with PKCE** — because a human user is being authenticated, not a service. This is OpenID Connect (OIDC): Keycloak acts as the Identity Provider and issues an ID token containing the user's identity claims alongside the access token.
 
-    def auth_flow(self, request: httpx.Request):
-        request.headers["Authorization"] = f"Bearer {self._token}"
-        yield request
+The `frontend` Keycloak client is a **public client** (no secret, since browser apps cannot keep secrets) with standard flow enabled:
 
-async def call(self, name: str, arguments: dict):
-    token = self._jwt_service.sign()
-    async with Client(self._url, auth=_BearerAuth(token)) as client:
-        result = await client.call_tool(name, arguments)
-        ...
+```json
+{
+  "clientId": "frontend",
+  "publicClient": true,
+  "standardFlowEnabled": true,
+  "redirectUris": ["http://localhost:3000/*"],
+  "webOrigins": ["http://localhost:3000"]
+}
 ```
 
-`auth_flow` is a generator — `yield request` hands the modified request to the transport; `httpx` continues the response cycle without needing a second yield.
+`keycloak-js` initialises in the browser and handles the redirect flow automatically:
 
-### PEM encoding across environments
+```typescript
+const kc = new Keycloak({ url: KC_URL, realm: KC_REALM, clientId: KC_CLIENT_ID });
 
-RSA private keys stored as single-line env vars (with `\n` escaped as `\\n`) need normalisation before `load_pem_private_key` can parse them. Docker Compose, shell `.env` files, and Python's `os.environ` each preserve or transform escape sequences differently. The fix is exhaustive replacement before loading:
-
-```python
-pem = (raw.replace("\\r\\n", "\n").replace("\\r", "\n")
-          .replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n").strip())
-return load_pem_private_key(pem.encode(), password=None)
+kc.init({ onLoad: "login-required", pkceMethod: "S256" })
+  .then((authenticated) => {
+    if (authenticated && kc.tokenParsed) {
+      setUser({
+        name: kc.tokenParsed["name"] ?? kc.tokenParsed["preferred_username"],
+        email: kc.tokenParsed["email"],
+        username: kc.tokenParsed["preferred_username"],
+      });
+    }
+  });
 ```
 
-This handles all encoding variants that appear in practice without requiring the key to be stored in a particular format.
+`onLoad: 'login-required'` redirects unauthenticated users to Keycloak before the app renders. `pkceMethod: 'S256'` enables PKCE — a code challenge/verifier pair that prevents authorization code interception attacks (essential for public clients). After login, the user's name and email are shown in the sidebar; `kc.logout()` ends the session on Keycloak's side.
+
+The username is included in the `POST /api/chat/new` request body and stored on the `conversations` table, so `GET /api/chat/history?username=...` returns only that user's conversations.
+
+### Why two different flows
+
+| | Client Credentials | Authorization Code + PKCE |
+|-|-------------------|--------------------------|
+| **Who** | A service (no user) | A human user |
+| **Flow** | OAuth 2.0 | OIDC (OAuth 2.0 + identity layer) |
+| **Token** | Access token only | Access token + ID token |
+| **Client type** | Confidential (has secret) | Public (no secret) |
+| **Use case** | M2M API calls | Interactive browser login |
+
+Client Credentials is strictly OAuth 2.0 — there is no user identity involved and no ID token. Authorization Code with PKCE is OIDC — Keycloak returns an ID token with user claims, making it an Identity Provider, not just a token issuer.
 
 ---
 
@@ -931,11 +968,11 @@ The `/epic/:id` and `/ticket/:id` Next.js pages fetch the same proxy endpoints a
 
 **`_append_review` over `_annotate_last`.** An early implementation mutated the "Designing solution architecture..." message in place to append the review result. This hid reviewer comments when the loop ran more than once (each review overwrote the last). Appending a separate review message means every iteration of the approval loop is visible in the thinking log — useful for debugging and for user confidence.
 
-**Implementing OIDC for service-to-service authentication.** OIDC is typically used for user login, but the underlying pattern — a signer presents a signed JWT, the recipient fetches the signer's public key from a well-known endpoint and verifies it — applies equally well to service identity. Each service on the ticket-creation path (ticket-agent, mcp-server, backend) acts as its own mini OIDC provider: it holds a private RSA key, exposes its public key at `GET /api/.well-known/jwks`, and signs outbound requests with a short-lived RS256 JWT carrying `iss = SERVICE_HOST`. The recipient plays the role of the relying party: it reads `iss` from the token, checks it against `WHITELISTED_HOSTS`, fetches the JWKS from that issuer, and verifies the signature. No shared secret, no database, no centralised auth server — each service is self-describing. The 5-minute in-memory JWKS cache per issuer means key rotation takes effect within one TTL without any service restart, and adding a new caller requires only appending its URL to the recipient's `WHITELISTED_HOSTS`.
+**Keycloak as the central Authorization Server for all authentication.** Rather than managing per-service RSA key pairs and WHITELISTED_HOSTS, all token issuance and key management is delegated to Keycloak. Services use OAuth 2.0 Client Credentials to get tokens; Keycloak's JWKS endpoint (`/realms/architect/protocol/openid-connect/certs`) is the single source of truth for public key distribution. The realm configuration is in `infra/keycloak/realm.json` and auto-imported on first start — the complete auth setup is reproducible with no manual steps. Two different flows are used deliberately: Client Credentials for M2M calls (no user identity, access token only), and Authorization Code + PKCE for browser login (OIDC, returns ID token with user claims). Using the wrong flow for the wrong use case — e.g. Client Credentials for a user-facing app — would produce tokens with no user identity and no way to log out a specific user.
 
-**`_BearerAuth(httpx.Auth)` over `headers=` kwargs.** FastMCP's `Client` does not accept a `headers` kwarg — it uses `httpx` internally and expects an `httpx.Auth` subclass. Implementing `auth_flow` as a one-yield generator is the correct extension point: `yield request` lets `httpx` send the request and handle the response without requiring the auth object to inspect it.
+**`_BearerAuth(httpx.Auth)` over `headers=` kwargs.** FastMCP's `Client` does not accept a `headers` kwarg — it uses `httpx` internally and expects an `httpx.Auth` subclass. Implementing `auth_flow` as a one-yield generator is the correct extension point: `yield request` lets `httpx` send the request and handle the response without requiring the auth object to inspect it. The token passed to `_BearerAuth` comes from `KeycloakTokenService.get_token()` — cached in memory, refreshed 30 seconds before expiry.
 
-**Backend ticket proxy.** The frontend never talks directly to the ticket-service. A `TicketModule` in the NestJS backend proxies the read endpoints — this keeps the internal service hostname off the browser, and means the ticket-service URL can change without touching the frontend. The proxy also signs each forwarded request with an RS256 JWT so the ticket-service can enforce the same authentication policy regardless of which internal caller is making the request.
+**Backend ticket proxy.** The frontend never talks directly to the ticket-service. A `TicketModule` in the NestJS backend proxies the read endpoints — this keeps the internal service hostname off the browser, and means the ticket-service URL can change without touching the frontend. The proxy obtains a Keycloak access token via the `backend` client credentials before forwarding each request, so the ticket-service enforces the same JWT validation policy regardless of which internal caller is making the request.
 
 **Personas, templates, and schemas in separate directories.** Each node's system prompt (persona), user prompt strings (templates), and output models (schemas) live in their own files under `agent/personas/`, `agent/templates/`, and `agent/schemas/`. A persona defines who the LLM is — it has no parameters and rarely changes. A template is a parameterised string — it changes as the conversation context changes. A schema is a Pydantic model — it defines the JSON contract the LLM must return. Mixing all three inside the node file makes it hard to audit prompts, test schemas in isolation, or update wording without touching logic. The separation means you can read every persona in one place and every output contract in another.
 

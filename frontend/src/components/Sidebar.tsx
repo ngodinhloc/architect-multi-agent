@@ -2,21 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PanelLeft, PanelRight, Plus, MessageSquare } from "lucide-react";
+import { PanelLeft, PanelRight, Plus, MessageSquare, LogOut, User } from "lucide-react";
 import { getHistory } from "@/lib/api";
 import { ConversationSummary } from "@/types/chat";
+import { useKeycloak } from "@/components/KeycloakProvider";
 
 export default function Sidebar() {
   const router = useRouter();
+  const { user, logout } = useKeycloak();
   const [isOpen, setIsOpen] = useState(true);
   const [history, setHistory] = useState<ConversationSummary[]>([]);
 
   useEffect(() => {
-    const refresh = () => getHistory().then(setHistory).catch(() => {});
+    if (!user?.username) return;
+    const refresh = () => getHistory(user.username).then(setHistory).catch(() => {});
     refresh();
     window.addEventListener("chat-completed", refresh);
     return () => window.removeEventListener("chat-completed", refresh);
-  }, []);
+  }, [user?.username]);
 
   function handleNewChat() {
     router.push(`/?session=${Date.now()}`);
@@ -67,6 +70,40 @@ export default function Sidebar() {
           </button>
         ))}
       </nav>
+
+      {/* User section */}
+      <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+        {isOpen ? (
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+              <User size={13} className="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                {user?.name ?? "—"}
+              </p>
+              <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                {user?.email ?? ""}
+              </p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            >
+              <LogOut size={13} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            <LogOut size={14} />
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

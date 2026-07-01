@@ -12,6 +12,7 @@ import {
   ReplyInterface, FinalReplyInterface,
 } from "@/types/chat";
 import { BrainCircuit } from "lucide-react";
+import { useKeycloak } from "@/components/KeycloakProvider";
 
 const IDLE_TIMEOUT_MS = 30_000;
 
@@ -121,6 +122,7 @@ export default function ArchitectChat() {
   const searchParams = useSearchParams();
   const session = searchParams.get("session");
   const chatId = searchParams.get("chat");
+  const { user } = useKeycloak();
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ReplyContent>(null);
@@ -327,7 +329,7 @@ export default function ArchitectChat() {
     setCompletedTurns([]);
 
     try {
-      const { id } = await newChat(message);
+      const { id } = await newChat(message, user?.username);
       activeIdRef.current = id;
       conversationIdRef.current = id;
       resetIdleTimer();

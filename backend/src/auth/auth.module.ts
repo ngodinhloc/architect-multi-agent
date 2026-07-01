@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { JwtService } from './jwt/jwt.service';
+import { KeycloakTokenService } from './keycloak/keycloak-token.service';
 
 @Module({
-  providers: [JwtService],
-  exports: [JwtService],
+  providers: [KeycloakTokenService],
+  exports: [KeycloakTokenService],
 })
 export class AuthModule {}

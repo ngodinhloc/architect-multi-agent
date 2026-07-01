@@ -26,7 +26,7 @@ export class ChatService {
     return `chat:${id}`;
   }
 
-  async newChat(message: string): Promise<{ id: string }> {
+  async newChat(message: string, username?: string): Promise<{ id: string }> {
     const id = uuidv4();
     const chatObject: ChatInterface = {
       id,
@@ -38,6 +38,7 @@ export class ChatService {
     const conversation = this.conversationRepo.create({
       uuid: id,
       title: message,
+      username: username ?? null,
       messages: chatObject.messages as unknown as Record<string, unknown>[],
     });
     await this.conversationRepo.save(conversation);
@@ -125,8 +126,9 @@ export class ChatService {
     };
   }
 
-  async getHistory(): Promise<{ id: string; title: string; createdAt: Date }[]> {
+  async getHistory(username: string): Promise<{ id: string; title: string; createdAt: Date }[]> {
     const conversations = await this.conversationRepo.find({
+      where: { username },
       order: { createdAt: 'DESC' },
       select: { uuid: true, title: true, createdAt: true },
     });

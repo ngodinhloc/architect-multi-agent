@@ -1,14 +1,14 @@
 import httpx
-from app.auth.jwt_service import JwtService
+from app.auth.keycloak_token_service import KeycloakTokenService
 from app.configs.settings import settings
 
 
 class TicketTool:
-    def __init__(self, jwt_service: JwtService) -> None:
-        self._jwt_service = jwt_service
+    def __init__(self, keycloak_token_service: KeycloakTokenService) -> None:
+        self._keycloak_token_service = keycloak_token_service
 
     async def create(self, ticket: dict) -> dict:
-        token = self._jwt_service.sign()
+        token = await self._keycloak_token_service.get_token()
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{settings.ticket_service_url}/api/ticket/",

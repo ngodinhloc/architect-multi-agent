@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/Sidebar";
+import { KeycloakProvider } from "@/components/KeycloakProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,8 +25,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex h-full" suppressHydrationWarning>
-        <Sidebar />
-        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        <KeycloakProvider>
+          <Sidebar />
+          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        </KeycloakProvider>
       </body>
     </html>
   );
