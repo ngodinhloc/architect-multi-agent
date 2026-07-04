@@ -16,6 +16,8 @@ A **multi-agent AI** system for software architecture planning. Describe a requi
 
 ![Grafana dashboard](screenshot_grafana.png)
 
+![Loki logs in Grafana Explore](screenshot_loki.png)
+
 ---
 
 ## Architecture
@@ -142,6 +144,8 @@ The system is composed of ten services communicating over HTTP, WebSocket, Rabbi
 | keycloak | 8080 | `keycloak/` | Keycloak 26 |
 | prometheus | 9090 | `prometheus/` | Prometheus v2.53 |
 | grafana | 3001 | `grafana/` | Grafana 11.1 |
+| loki | 3100 | `loki/` | Grafana Loki 3.0 |
+| promtail | — | `promtail/` | Grafana Promtail 3.0 |
 
 ---
 
@@ -232,6 +236,16 @@ Prometheus (port 9090) scrapes all five application services every 15 seconds. G
 | ticket-agent | `ticket_agent_llm_requests_total{node}` | LLM calls per graph node |
 | mcp-server | `mcp_server_tool_requests_total{tool}` | MCP tool calls (`create_epic`, `create_ticket`) |
 | ticket-service | `ticket_service_requests_total{endpoint}` | Requests to epic and ticket endpoints |
+
+### Logs (Loki + Promtail)
+
+![Loki logs in Grafana Explore](screenshot_loki.png)
+
+**Promtail** (`promtail/`) tails container logs directly from the Docker Engine API (`docker_sd_configs` against `/var/run/docker.sock`) and ships them to **Loki** (`loki/`, port 3100), which is pre-provisioned as a Grafana datasource alongside Prometheus. Logs are queried and live-tailed from Grafana's **Explore** view using LogQL — no separate log UI.
+
+Only containers carrying the `logs.collect=true` label are collected — `architect-agent`, `backend`, `mcp-server`, `ticket-agent`, `ticket-service` (see `docker-compose.yml`). This is a hard requirement, not just a relabeling convenience: filtering by `docker_sd_configs.filters` restricts which containers Promtail's Docker API discovery returns in the first place. An earlier attempt used `relabel_configs` with `action: keep` instead — that only strips labels from non-matching containers *after* they're already being tailed, and Loki rejects any push where a stream has zero labels, which corrupts the entire batch (including the services you do want). Filtering at discovery time avoids the empty-label case entirely.
+
+To collect logs from an additional service, add `labels: ["logs.collect=true"]` to it in `docker-compose.yml` — no changes to Promtail's config are needed. Both Loki and Promtail run with `log_level: warn` to keep their own container output quiet.
 
 ---
 
@@ -528,7 +542,7 @@ Open [http://localhost:3000](http://localhost:3000). You will be redirected to K
 - Keycloak admin UI: [http://localhost:8080](http://localhost:8080) — `admin` / `admin`
 - Kong proxy: [http://localhost:8888](http://localhost:8888)
 - Prometheus: [http://localhost:9090](http://localhost:9090)
-- Grafana: [http://localhost:3001](http://localhost:3001) — `admin` / `admin`
+- Grafana: [http://localhost:3001](http://localhost:3001) — `admin` / `admin` (Explore → Loki datasource for logs)
 - RabbitMQ management: [http://localhost:15672](http://localhost:15672) — `guest` / `guest`
 
 ### Required environment

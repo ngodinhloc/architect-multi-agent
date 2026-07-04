@@ -26,6 +26,8 @@ The focus is on the decisions that make this work in practice:
 
 ![Grafana dashboard](./screenshot_grafana.png)
 
+![Loki logs in Grafana Explore](./screenshot_loki.png)
+
 ---
 
 ## Architecture Overview
@@ -49,6 +51,10 @@ The focus is on the decisions that make this work in practice:
 **MCP Server** (FastMCP + FastAPI, port 8002) — exposes `create_epic` and `create_ticket` over the MCP protocol. On startup, serialises the tools spec (name, description, inputSchema, providerHost) into Redis under `mcp_tools` so consumers can discover tools without hardcoding them. Inbound MCP requests are validated by Kong before they reach the server — no per-service JWT middleware. Outbound REST calls to ticket-service (`http://kong:8000/ticket-service`) include a Keycloak token obtained via the `mcp-server` client credentials.
 
 **Ticket Service** (NestJS 11, port 8003) — minimal CRUD service backed by its own PostgreSQL instance. No RabbitMQ, no Redis, no WebSocket. JWT validation is handled upstream by Kong — all requests arriving at this service have already been verified.
+
+**Prometheus + Grafana** — Prometheus scrapes `/metrics` on each application service every 15 seconds; Grafana (port 3001) is pre-provisioned with the Prometheus datasource and an overview dashboard.
+
+**Loki + Promtail** — centralised log storage and collection, provisioned as a second Grafana datasource alongside Prometheus. Promtail discovers containers directly through the Docker Engine API and ships their stdout/stderr to Loki, which indexes only a small set of labels (`container`, `service`, `project`) rather than full text — logs are searched at query time with LogQL from Grafana's Explore view instead of through a separate log UI.
 
 ---
 
@@ -1011,6 +1017,8 @@ The `/epic/:id` and `/ticket/:id` Next.js pages fetch the same proxy endpoints a
 **Kong as API Gateway and service registry.** Routing all traffic — both north-south (browser to backend) and east-west (service to service) — through Kong means no service hardcodes another service's hostname. ticket-agent calls `http://kong:8000/mcp-server`; mcp-server calls `http://kong:8000/ticket-service`; backend calls `http://kong:8000/ticket-service`. JWT validation, rate-limiting, and routing are all configured in one place. The alternative — each service calling others directly and maintaining its own JWKS cache — scatters auth logic across the codebase and means rotating Keycloak's key requires touching every service. With Kong, key rotation requires only restarting Kong.
 
 **Backend ticket proxy.** The frontend never talks directly to the ticket-service. A `TicketModule` in the NestJS backend proxies the read endpoints — this keeps the internal service hostname off the browser, and means the ticket-service URL can change without touching the frontend. The proxy obtains a Keycloak access token via the `backend` client credentials and routes each request through Kong (`http://kong:8000/ticket-service`), where Kong validates the M2M JWT before forwarding to ticket-service.
+
+**Filter Promtail's log collection at Docker discovery time, not via `relabel_configs`.** The first attempt at restricting which containers get their logs shipped to Loki used `docker_sd_configs` + `relabel_configs` with `action: keep` matching on the `com.docker.compose.service` label. This looked correct and even seemed to work in a quick spot-check — but it doesn't stop Promtail from tailing the excluded containers; it only strips their labels at push time. Loki rejects a push if *any* stream in the batch has zero labels, which corrupted every batch, including the ones carrying real data from services that should have been collected. The fix was to filter at the Docker Engine API layer itself, via `docker_sd_configs.filters`, so non-matching containers are never discovered in the first place. Docker's `label` filter also turned out to AND multiple values of the same key rather than OR them, so restricting to five different `com.docker.compose.service` values in one filter matched nothing — the working approach adds a single shared label (`logs.collect=true`) to the services that should be collected and filters on that one label's presence.
 
 **Personas, templates, and schemas in separate directories.** Each node's system prompt (persona), user prompt strings (templates), and output models (schemas) live in their own files under `agent/personas/`, `agent/templates/`, and `agent/schemas/`. A persona defines who the LLM is — it has no parameters and rarely changes. A template is a parameterised string — it changes as the conversation context changes. A schema is a Pydantic model — it defines the JSON contract the LLM must return. Mixing all three inside the node file makes it hard to audit prompts, test schemas in isolation, or update wording without touching logic. The separation means you can read every persona in one place and every output contract in another.
 

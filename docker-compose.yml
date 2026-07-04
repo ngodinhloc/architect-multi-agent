@@ -88,6 +88,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8003:8000"
+    labels:
+      - "logs.collect=true"
     environment:
       PORT: "8000"
       APP_ENV: "DEV"
@@ -114,6 +116,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8002:8000"
+    labels:
+      - "logs.collect=true"
     env_file:
       - ./mcp-server/.env
     environment:
@@ -150,6 +154,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8001:8000"
+    labels:
+      - "logs.collect=true"
     env_file:
       - ./architect-agent/.env
     environment:
@@ -179,6 +185,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8004:8000"
+    labels:
+      - "logs.collect=true"
     env_file:
       - ./architect-agent/.env
       - ./ticket-agent/.env
@@ -217,6 +225,8 @@ services:
       dockerfile: infra/Dockerfile.dev
     ports:
       - "8000:8000"
+    labels:
+      - "logs.collect=true"
     env_file:
       - ./backend/.env
     environment:
@@ -331,6 +341,34 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.0.0
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
@@ -343,3 +381,4 @@ volumes:
   ticket_service_dist:
   prometheus_data:
   grafana_data:
+  loki_data:

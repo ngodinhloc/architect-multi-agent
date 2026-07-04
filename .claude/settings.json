@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -G http://localhost:3100/loki/api/v1/query --data-urlencode 'query={container=~\".+\"}' --data-urlencode 'limit=5')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -u admin:admin http://localhost:3001/api/datasources/name/Loki)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -G http://localhost:3100/loki/api/v1/label/service/values --data-urlencode \"start=1783123264000000000\")",
+      "Bash(curl -s http://localhost:9080/targets)"
+    ]
+  }
+}
