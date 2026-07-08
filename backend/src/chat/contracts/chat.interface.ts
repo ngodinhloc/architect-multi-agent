@@ -69,11 +69,29 @@ export interface MessageInterface {
 
 export interface ChatInterface {
   id: string;
-  title?: string | null;
+  title: string;
   timestamp?: Date;
   messages: MessageInterface[];
   status: ChatStatus;
   agentStatus?: AgentStatus;
   created_at?: Date;
   modified_at?: Date;
+}
+
+export interface ChatHistoryInterface {
+  id: string;
+  title?: string;
+  createdAt: Date;
+}
+
+export interface ChatCreatedResponse {
+  id: string;
+}
+
+export interface ChatContinueResponse {
+  accepted: true;
+}
+
+export interface ChatStopResponse {
+  stopped: true;
 }

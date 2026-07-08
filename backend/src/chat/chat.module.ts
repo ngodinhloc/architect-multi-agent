@@ -6,10 +6,11 @@ import { MessageService } from './services/message.service';
 import { ChatGateway } from './gateways/chat.gateway';
 import { Conversation } from '../database/entities/conversation.entity';
 import { MetricsModule } from '../metrics/metrics.module';
+import { ConversationRepository } from 'src/database/repositories/conversation.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Conversation]), MetricsModule],
   controllers: [ChatController],
-  providers: [ChatService, MessageService, ChatGateway],
+  providers: [ChatService, MessageService, ChatGateway, ConversationRepository],
 })
 export class ChatModule {}

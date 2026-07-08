@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SignJWT, importPKCS8 } from 'jose';
 import { createPrivateKey, createPublicKey, createHash, KeyObject } from 'crypto';
-import { AppLogger } from '../../common/logger/app-logger';
+import { AppLogger } from '../../common/logger/services/app-logger';
 
 const REFRESH_BUFFER_SECONDS = 30;
 const CLIENT_ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';

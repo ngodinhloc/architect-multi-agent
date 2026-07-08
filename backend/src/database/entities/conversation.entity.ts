@@ -11,11 +11,11 @@ export class Conversation {
   @PrimaryColumn({ type: 'uuid' })
   uuid!: string;
 
-  @Column({ type: 'varchar', length: 255, default: null, nullable: true })
-  username!: string | null;
+  @Column({ type: 'varchar', length: 255, nullable: false })
+  username!: string;
 
-  @Column({ type: 'varchar', length: 500, default: null })
-  title!: string | null;
+  @Column({ type: 'varchar', length: 500, nullable: false })
+  title!: string;
 
   @Column({ type: 'jsonb', default: '[]' })
   messages!: Record<string, unknown>[];

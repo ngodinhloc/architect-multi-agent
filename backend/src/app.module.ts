@@ -8,12 +8,13 @@ import { TicketModule } from './ticket/ticket.module';
 import { AuthModule } from './auth/auth.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { KeycloakAuthMiddleware } from './auth/middlewares/keycloak-auth.middleware';
+import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
   imports: [DatabaseModule, RedisModule, RabbitMQModule, ChatModule, HealthModule, TicketModule, AuthModule, MetricsModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(KeycloakAuthMiddleware).forRoutes('*');
+    consumer.apply(LoggingMiddleware, KeycloakAuthMiddleware).forRoutes('*');
   }
 }

@@ -1,67 +1,57 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
 import { RedisService } from '../../redis/services/redis.service';
-import { Conversation } from '../../database/entities/conversation.entity';
 import {
   ChatInterface,
   ChatStatus,
   ChatActor,
   MessageInterface,
   AgentStatus,
+  ChatHistoryInterface,
+  ChatCreatedResponse,
+  ChatContinueResponse,
+  ChatStopResponse,
 } from '../contracts/chat.interface';
 import { MessageService } from './message.service';
+import { ConversationRepository } from 'src/database/repositories/conversation.repository';
 
 @Injectable()
 export class ChatService {
   constructor(
-    @InjectRepository(Conversation)
-    private readonly conversationRepo: Repository<Conversation>,
+    private readonly conversationRepo: ConversationRepository,
     private readonly redisService: RedisService,
     private readonly messageService: MessageService,
   ) {}
 
-  private redisKey(id: string): string {
-    return `chat:${id}`;
-  }
-
-  async newChat(message: string, username?: string): Promise<{ id: string }> {
-    const id = uuidv4();
+  async newChat(message: string, username: string): Promise<ChatCreatedResponse> {
+    const conversation = await this.conversationRepo.new(username, message);
     const chatObject: ChatInterface = {
-      id,
-      title: message,
-      messages: [{ actor: ChatActor.user, content: message, timestamp: new Date() }],
+      id: conversation.uuid,
+      title: conversation.title,
+      messages: conversation.messages as unknown as MessageInterface[],
       status: ChatStatus.isActive,
       agentStatus: AgentStatus.isThinking,
     };
-    const conversation = this.conversationRepo.create({
-      uuid: id,
-      title: message,
-      username: username ?? null,
-      messages: chatObject.messages as unknown as Record<string, unknown>[],
-    });
-    await this.conversationRepo.save(conversation);
-    await this.redisService.setJson(this.redisKey(id), chatObject, 7200);
-    this.messageService.publish(id, message, []);
-    return { id };
+    
+    await this.redisService.setJson(this.redisKey(chatObject.id), chatObject, 7200);
+    this.messageService.publish(chatObject.id, message, []);
+    return { id: chatObject.id };
   }
 
-  async continueChat(id: string, message: string): Promise<{ accepted: true }> {
+  async continueChat(id: string, message: string): Promise<ChatContinueResponse> {
     let existingMessages: MessageInterface[];
-    let title: string | null = null;
+    let title: string;
 
-    const cached = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
+    const cached: ChatInterface | null = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
     if (cached) {
-      existingMessages = cached.messages ?? [];
-      title = cached.title ?? null;
+      existingMessages = cached.messages;
+      title = cached.title;
     } else {
-      const conversation = await this.conversationRepo.findOne({ where: { uuid: id } });
+      const conversation = await this.conversationRepo.findOneByUuid(id);
       if (!conversation) {
         throw new NotFoundException(`Conversation ${id} not found`);
       }
       existingMessages = conversation.messages as unknown as MessageInterface[];
-      title = conversation.title ?? null;
+      title = conversation.title;
     }
 
     const newMessage: MessageInterface = {
@@ -83,13 +73,13 @@ export class ChatService {
     return { accepted: true };
   }
 
-  async stopChat(id: string): Promise<{ stopped: true }> {
+  async stopChat(id: string): Promise<ChatStopResponse> {
     const current = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
     if (!current) {
       throw new NotFoundException(`Conversation ${id} not found`);
     }
 
-    await this.conversationRepo.save({
+    await this.conversationRepo.repository.save({
       uuid: id,
       title: current.title ?? undefined,
       messages: current.messages as unknown as Record<string, unknown>[],
@@ -103,16 +93,12 @@ export class ChatService {
     const cached = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
     if (cached) {
       if (cached.agentStatus === AgentStatus.hasReplied) {
-        this.conversationRepo.update(
-          { uuid: id },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          { messages: cached.messages } as any,
-        ).catch(() => {});
+        await this.conversationRepo.update(id, cached.messages);
       }
       return cached;
     }
 
-    const conversation = await this.conversationRepo.findOne({ where: { uuid: id } });
+    const conversation = await this.conversationRepo.findOneByUuid(id);
     if (!conversation) {
       throw new NotFoundException(`Conversation ${id} not found`);
     }
@@ -126,12 +112,12 @@ export class ChatService {
     };
   }
 
-  async getHistory(username: string): Promise<{ id: string; title: string; createdAt: Date }[]> {
-    const conversations = await this.conversationRepo.find({
-      where: { username },
-      order: { createdAt: 'DESC' },
-      select: { uuid: true, title: true, createdAt: true },
-    });
+  async getHistory(username: string): Promise<ChatHistoryInterface[]> {
+    const conversations = await this.conversationRepo.findByUsername(username);
     return conversations.map((c) => ({ id: c.uuid, title: c.title ?? '', createdAt: c.createdAt }));
+  }
+
+  private redisKey(id: string): string {
+    return `chat:${id}`;
   }
 }

@@ -3,8 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module';
-import { LoggingMiddleware } from './common/middleware/logging.middleware';
-import { AppLogger } from './common/logger/app-logger';
+import { AppLogger } from './common/logger/services/app-logger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: new AppLogger() });
@@ -18,7 +17,6 @@ async function bootstrap() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.useWebSocketAdapter(new WsAdapter(app) as any);
-  app.use(new LoggingMiddleware().use.bind(new LoggingMiddleware()));
 
   app.useGlobalPipes(
     new ValidationPipe({

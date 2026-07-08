@@ -1,32 +1,25 @@
-import { Controller, Get, Param, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { KeycloakTokenService } from '../../auth/services/keycloak-token.service';
+import { Controller, Get, Param } from '@nestjs/common';
+import { TicketClient } from '../services/ticket.client';
 
-const TICKET_SERVICE_URL = process.env.TICKET_SERVICE_URL ?? 'http://localhost:8003';
 
 @Controller('api')
 export class TicketProxyController {
-  constructor(private readonly keycloakTokenService: KeycloakTokenService) {}
+  constructor(
+    private readonly ticketClient: TicketClient
+  ) {}
 
   @Get('epic/:id')
   async getEpic(@Param('id') id: string) {
-    return this.proxyGet(`${TICKET_SERVICE_URL}/api/epic/${id}`, `Epic ${id} not found`);
+    return this.ticketClient.get(`/api/epic/${id}`);
   }
 
   @Get('epic/:epicId/tickets')
   async getEpicTickets(@Param('epicId') epicId: string) {
-    return this.proxyGet(`${TICKET_SERVICE_URL}/api/epic/${epicId}/tickets`);
+    return this.ticketClient.get(`/api/epic/${epicId}/tickets`);
   }
 
   @Get('ticket/:id')
   async getTicket(@Param('id') id: string) {
-    return this.proxyGet(`${TICKET_SERVICE_URL}/api/ticket/${id}`, `Ticket ${id} not found`);
-  }
-
-  private async proxyGet(url: string, notFoundMsg?: string) {
-    const token = await this.keycloakTokenService.getToken();
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 404) throw new NotFoundException(notFoundMsg ?? 'Not found');
-    if (!res.ok) throw new InternalServerErrorException('Ticket service error');
-    return res.json();
+    return this.ticketClient.get(`/api/ticket/${id}`);
   }
 }

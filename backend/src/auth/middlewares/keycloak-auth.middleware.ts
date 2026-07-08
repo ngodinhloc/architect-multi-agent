@@ -1,15 +1,8 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { decodeJwt } from 'jose';
-import { AppLogger } from '../../common/logger/app-logger';
-
-const SKIP_PATHS = new Set(['/api/health', '/api/.well-known/jwks', '/metrics']);
-
-export interface AuthUser {
-  username: string;
-  email: string;
-  name: string;
-}
+import { AppLogger } from '../../common/logger/services/app-logger';
+import { AuthUser } from '../contracts/auth.interface'
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -20,13 +13,18 @@ declare global {
   }
 }
 
+const PUBLIC_PATHS = new Set(['/api/health', '/api/.well-known/jwks', '/metrics']);
+const TOKEN_COOKIE_NAME = 'kc_token';
+
 @Injectable()
 export class KeycloakAuthMiddleware implements NestMiddleware {
-  private readonly logger = new AppLogger();
+  constructor(
+    private readonly logger: AppLogger
+  ) {}
 
-  async use(req: Request, res: Response, next: NextFunction) {
+  use(req: Request, res: Response, next: NextFunction) {
     const path = req.originalUrl.split('?')[0];
-    if (SKIP_PATHS.has(path)) {
+    if (PUBLIC_PATHS.has(path)) {
       return next();
     }
 
@@ -38,12 +36,7 @@ export class KeycloakAuthMiddleware implements NestMiddleware {
 
     try {
       // Kong already verified the signature — just decode to extract user claims
-      const payload = decodeJwt(token);
-      req.user = {
-        username: (payload['preferred_username'] as string) ?? '',
-        email: (payload['email'] as string) ?? '',
-        name: (payload['name'] as string) ?? (payload['preferred_username'] as string) ?? '',
-      };
+      req.user = this.buildUserFromToken(token);
       this.logger.log('KeycloakAuthMiddleware: user resolved', {
         username: req.user.username,
         path,
@@ -58,9 +51,21 @@ export class KeycloakAuthMiddleware implements NestMiddleware {
     }
   }
 
+  private buildUserFromToken(token: string): AuthUser {
+    const payload = decodeJwt(token);
+    return {
+      username: (payload['preferred_username'] as string) ?? '',
+      email: (payload['email'] as string) ?? '',
+      name: (payload['name'] as string) ?? (payload['preferred_username'] as string) ?? '',
+    };
+  }
+
   private extractToken(req: Request): string | null {
     const cookieHeader = req.headers['cookie'] ?? '';
-    const match = /(?:^|;\s*)kc_token=([^;]+)/.exec(cookieHeader);
-    return match ? decodeURIComponent(match[1]) : null;
+    const cookie = cookieHeader
+      .split(';')
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`${TOKEN_COOKIE_NAME}=`));
+    return cookie ? decodeURIComponent(cookie.slice(TOKEN_COOKIE_NAME.length + 1)) : null;
   }
 }
