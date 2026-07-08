@@ -6,6 +6,11 @@ services:
       - "15672:15672"
     volumes:
       - ./rabbitmq/advanced.config:/etc/rabbitmq/advanced.config
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -24,6 +29,11 @@ services:
       POSTGRES_DB: architect
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U architect -d architect"]
       interval: 5s
@@ -36,6 +46,11 @@ services:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -54,8 +69,14 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
+      JAVA_OPTS_APPEND: "-Xmx256m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./keycloak:/opt/keycloak/data/import
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9000' 2>/dev/null && echo ok || exit 1"]
       interval: 10s
@@ -84,6 +105,11 @@ services:
     depends_on:
       postgres-backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 10s
@@ -122,6 +148,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 15s
@@ -153,9 +184,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
-      interval: 15s
+      interval: 15m
       timeout: 10s
       retries: 5
       start_period: 30s
@@ -193,9 +229,14 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
-      interval: 15s
+      interval: 15m
       timeout: 10s
       retries: 5
       start_period: 30s
@@ -237,6 +278,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 10s
@@ -267,6 +313,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     restart: unless-stopped
 
   kong:
@@ -280,6 +331,8 @@ services:
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_NGINX_WORKER_PROCESSES: "1"
+      KONG_MEM_CACHE_SIZE: "32m"
       KEYCLOAK_URL: "http://keycloak:8080"
       KEYCLOAK_PUBLIC_URL: "http://localhost:8080"
       KEYCLOAK_REALM: "architect-multi-agent"
@@ -290,6 +343,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
@@ -308,6 +366,11 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     restart: unless-stopped
 
   grafana:
@@ -324,6 +387,11 @@ services:
     depends_on:
       - prometheus
       - loki
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     restart: unless-stopped
 
   loki:
@@ -334,6 +402,11 @@ services:
       - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
       interval: 10s
@@ -351,6 +424,11 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
     restart: unless-stopped
 
 volumes:
