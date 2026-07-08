@@ -13,33 +13,56 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RabbitMQService.name);
   private connection: amqp.ChannelModel | null = null;
   private channel: amqp.Channel | null = null;
+  private url = '';
+  private reconnecting = false;
+  private closing = false;
 
   constructor(private readonly metricsService: MetricsService) {}
 
   async onModuleInit() {
-    const url = process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672/';
-    await this.connect(url);
+    this.url = process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672/';
+    await this.connect();
   }
 
-  private async connect(url: string, attempt = 1): Promise<void> {
+  private async connect(attempt = 1): Promise<void> {
     const maxAttempts = 10;
     try {
-      this.connection = await amqp.connect(url);
-      this.channel = await this.connection.createChannel();
-      await this.channel.assertExchange(EXCHANGE, 'topic', { durable: true });
-      await this.channel.assertQueue(QUEUE, { durable: true });
-      await this.channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+      const connection = await amqp.connect(this.url);
+      const channel = await connection.createChannel();
+      await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+      await channel.assertQueue(QUEUE, { durable: true });
+      await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+
+      connection.on('error', (err) => this.handleDisconnect(err));
+      connection.on('close', () => this.handleDisconnect(new Error('Connection closed')));
+
+      this.connection = connection;
+      this.channel = channel;
+      this.reconnecting = false;
       this.logger.log('RabbitMQService.connect: Connected to RabbitMQ', { conversationId: null, exchange: EXCHANGE, queue: QUEUE });
     } catch (err) {
       if (attempt >= maxAttempts) throw err;
       const delay = Math.min(1000 * attempt, 10000);
       this.logger.warn(`RabbitMQService.connect: RabbitMQ not ready, retrying in ${delay}ms…`, { conversationId: null, attempt, maxAttempts });
       await new Promise((r) => setTimeout(r, delay));
-      return this.connect(url, attempt + 1);
+      return this.connect(attempt + 1);
     }
   }
 
+  private handleDisconnect(err: Error) {
+    this.channel = null;
+    this.connection = null;
+    if (this.closing || this.reconnecting) return;
+    this.reconnecting = true;
+    this.logger.error(`RabbitMQService: connection lost, reconnecting: ${err.message}`, { conversationId: null });
+    void this.connect().catch((reconnectErr) => {
+      this.logger.error(`RabbitMQService: failed to reconnect: ${reconnectErr}`, { conversationId: null });
+      this.reconnecting = false;
+    });
+  }
+
   async onModuleDestroy() {
+    this.closing = true;
     await this.channel?.close();
     await this.connection?.close();
   }
