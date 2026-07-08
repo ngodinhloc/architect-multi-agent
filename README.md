@@ -139,8 +139,7 @@ The system is composed of ten services communicating over HTTP, WebSocket, Rabbi
 | kong | 8888 | `kong/` | Kong 3.8 (DB-less) |
 | rabbitmq | 5672 / 15672 | — | RabbitMQ 3 |
 | redis | 6379 | — | Redis 7 |
-| postgres-backend | 5432 | — | PostgreSQL 17 |
-| postgres-tickets | 5433 | — | PostgreSQL 17 |
+| postgres-backend | 5432 | — | PostgreSQL 17 (`architect`/`tickets` schemas) |
 | keycloak | 8080 | `keycloak/` | Keycloak 26 |
 | prometheus | 9090 | `prometheus/` | Prometheus v2.53 |
 | grafana | 3001 | `grafana/` | Grafana 11.1 |
