@@ -394,12 +394,12 @@ export default function ArchitectChat() {
   if (!hasConversation) {
     return (
       <div className="flex h-full flex-col items-center bg-zinc-50 px-4 pt-16 dark:bg-zinc-950">
-        <div className="flex w-full max-w-2xl flex-col items-center gap-6 text-center">
+        <div className="flex w-full max-w-3xl flex-col items-center gap-6 text-center">
           <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
             <BrainCircuit size={28} />
             <span className="text-2xl font-bold tracking-tight">Multi-Agent Architect</span>
           </div>
-          <p className="max-w-md text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
             Describe a software requirement. The AI will design a solution architecture and create development tickets.
           </p>
           <SearchBar onSearch={handleSearch} loading={loading} />
@@ -411,7 +411,7 @@ export default function ArchitectChat() {
   return (
     <div className="flex h-full flex-col bg-zinc-50 dark:bg-zinc-950">
       <div className="flex-1 overflow-y-auto px-4 py-8">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="space-y-6">
 
           {/* Completed turns */}
           {completedTurns.map((turn, i) => (
@@ -422,7 +422,7 @@ export default function ArchitectChat() {
                 </div>
               </div>
               {turn.thinkingMessages.length > 0 && (
-                <ul className="space-y-3 rounded-xl bg-zinc-900 p-4 subpixel-antialiased dark:bg-zinc-950">
+                <ul className="ml-auto w-[90%] space-y-3 rounded-xl bg-zinc-900 p-4 subpixel-antialiased dark:bg-zinc-950">
                   {turn.thinkingMessages.map((m, j) => (
                     <li key={j} className="flex items-start gap-3 text-sm text-zinc-200">
                       <span className="shrink-0 pt-0.5 text-sm text-zinc-500">
@@ -436,16 +436,20 @@ export default function ArchitectChat() {
               )}
               {turn.reply && (
                 <div className="flex justify-end">
-                  <div className="max-w-xl rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
+                  <div className="w-[90%] rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
                     {turn.reply}
                   </div>
                 </div>
               )}
               {turn.result && isReplyInterface(turn.result) && (
-                <PlanCard reply={turn.result} showActions={false} />
+                <div className="ml-auto w-[90%]">
+                  <PlanCard reply={turn.result} showActions={false} />
+                </div>
               )}
               {turn.result && isFinalReplyInterface(turn.result) && (
-                <FinalReplyCard reply={turn.result} />
+                <div className="ml-auto w-[90%]">
+                  <FinalReplyCard reply={turn.result} />
+                </div>
               )}
             </div>
           ))}
@@ -461,7 +465,7 @@ export default function ArchitectChat() {
 
               {/* Thinking log */}
               {(thinkingMessages.length > 0 || (isThinkingIdle && loading)) && (
-                <ul className="space-y-3 rounded-xl bg-zinc-900 p-4 subpixel-antialiased dark:bg-zinc-950">
+                <ul className="ml-auto w-[90%] space-y-3 rounded-xl bg-zinc-900 p-4 subpixel-antialiased dark:bg-zinc-950">
                   {thinkingMessages.map((m, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-zinc-200">
                       <span className="shrink-0 pt-0.5 text-sm text-zinc-500">
@@ -484,7 +488,7 @@ export default function ArchitectChat() {
 
               {reply && !loading && (
                 <div className="flex justify-end">
-                  <div className="max-w-xl rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
+                  <div className="w-[90%] rounded-2xl rounded-tr-none bg-zinc-200 px-4 py-3 text-sm text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100">
                     {reply}
                   </div>
                 </div>
@@ -497,15 +501,19 @@ export default function ArchitectChat() {
               )}
 
               {result && !loading && isReplyInterface(result) && (
-                <PlanCard
-                  reply={result}
-                  showActions
-                  onAccept={handleAccept}
-                />
+                <div className="ml-auto w-[90%]">
+                  <PlanCard
+                    reply={result}
+                    showActions
+                    onAccept={handleAccept}
+                  />
+                </div>
               )}
 
               {result && !loading && isFinalReplyInterface(result) && (
-                <FinalReplyCard reply={result} />
+                <div className="ml-auto w-[90%]">
+                  <FinalReplyCard reply={result} />
+                </div>
               )}
             </>
           )}
@@ -516,13 +524,11 @@ export default function ArchitectChat() {
 
       {/* Input bar */}
       <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto max-w-3xl">
-          <SearchBar
-            onSearch={currentConversationId ? handleContinue : handleSearch}
-            loading={loading}
-            placeholder={latestResultIsReply ? "Refine the plan or say 'Looks good'…" : "Ask a follow-up…"}
-          />
-        </div>
+        <SearchBar
+          onSearch={currentConversationId ? handleContinue : handleSearch}
+          loading={loading}
+          placeholder={latestResultIsReply ? "Refine the plan or say 'Looks good'…" : "Ask a follow-up…"}
+        />
       </div>
     </div>
   );
