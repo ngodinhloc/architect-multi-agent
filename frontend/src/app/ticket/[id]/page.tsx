@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, ClipboardList, Loader2 } from "lucide-react";
 import { TicketInterface } from "@/types/chat";
 import { getTicket } from "@/lib/api";
 
@@ -45,7 +45,7 @@ export default function TicketPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl space-y-6 p-8">
+      <div className="w-full space-y-6 p-8">
         <div className="flex items-center gap-3">
           <Link href={`/epic/${ticket.epicId}`} className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">
             <ArrowLeft size={14} />
@@ -61,12 +61,15 @@ export default function TicketPage() {
 
         {/* Requirements */}
         {ticket.requirements.length > 0 && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Requirements</p>
+          <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 dark:border-emerald-900 dark:from-emerald-950/40 dark:to-teal-950/40">
+            <div className="mb-3 flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <ClipboardList size={18} />
+              <span className="text-base font-bold uppercase tracking-wide">Requirements</span>
+            </div>
             <ul className="space-y-2">
               {ticket.requirements.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  <span className="mt-0.5 shrink-0 text-zinc-400">•</span>
+                <li key={i} className="flex items-start gap-2.5 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  <CheckCircle size={14} className="mt-0.5 shrink-0 text-emerald-500" />
                   {r.requirement}
                 </li>
               ))}
@@ -76,12 +79,12 @@ export default function TicketPage() {
 
         {/* Acceptance Criteria */}
         {ticket.acceptance_criteria.length > 0 && (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-5 dark:border-green-800 dark:bg-green-950/40">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">Acceptance Criteria</p>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-800 dark:bg-blue-950/40">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-400">Acceptance Criteria</p>
             <ul className="space-y-2">
               {ticket.acceptance_criteria.map((a, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  <CheckCircle size={14} className="mt-0.5 shrink-0 text-green-500" />
+                  <CheckCircle size={14} className="mt-0.5 shrink-0 text-blue-500" />
                   {a.criterion}
                 </li>
               ))}
