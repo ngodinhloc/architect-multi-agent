@@ -56,7 +56,8 @@ logger = logging.getLogger("http")
 
 class _HealthFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        return "/api/health" not in record.getMessage()
+        message = record.getMessage()
+        return "/api/health" not in message and "/metrics" not in message
 
 
 logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
@@ -86,7 +87,7 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
-    if request.url.path != "/api/health":
+    if request.url.path != "/api/health" and not request.url.path.startswith("/metrics"):
         ms = int((time.time() - start) * 1000)
         logger.info("%s %s %s %dms", request.method, request.url.path, response.status_code, ms)
     return response
