@@ -16,11 +16,12 @@ class PlanNode:
 
     async def __call__(self, state: ArchitectState) -> dict:
         requirement = state.get("requirement", "")
+        ticket_approved = state.get("tickets_approved", False)
         solution = state.get("solution")
-        comments = state.get("ticket_review_comments", [])
-
         solution_json = json.dumps(solution.model_dump() if solution else {}, indent=2)
-        if comments:
+
+        if not ticket_approved:
+            comments = state.get("ticket_review_comments", [])
             prompt = PLAN_PROMPT_REVISE.format(
                 requirement=requirement,
                 solution=solution_json,
@@ -29,6 +30,7 @@ class PlanNode:
         else:
             prompt = PLAN_PROMPT.format(requirement=requirement, solution=solution_json)
 
+        # increment the llm_requests metric
         llm_requests.labels(node="plan").inc()
         result: PlanOut = await self._llm.ainvoke([SystemMessage(content=PLAN_PERSONA), HumanMessage(content=prompt)])
 

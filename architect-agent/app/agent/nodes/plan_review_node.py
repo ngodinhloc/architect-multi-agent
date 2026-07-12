@@ -20,6 +20,7 @@ class PlanReviewNode:
             solution=json.dumps(solution.model_dump() if solution else {}, indent=2),
             tickets=json.dumps([t.model_dump() for t in tickets], indent=2),
         )
+        # increment the llm_requests metric
         llm_requests.labels(node="plan_review").inc()
         result: PlanReviewOut = await self._llm.ainvoke([SystemMessage(content=PLAN_REVIEW_PERSONA), HumanMessage(content=prompt)])
 

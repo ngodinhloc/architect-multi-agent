@@ -2,7 +2,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.agent.contracts.agent_interface import ArchitectState
-from app.contracts.chat_interface import NodeName, ReplyInterface, UserIntent
+from app.contracts.chat_interface import MessageInterface, NodeName, ReplyInterface, SolutionInterface, UserIntent
 from app.agent.schemas.intent_schema import IntentOut
 from app.agent.templates.intent_templates import INTENT_PERSONA, INTENT_PROMPT
 from app.events.rabbitmq_publisher import RabbitMQPublisher
@@ -22,48 +22,52 @@ class IntentNode:
         latest = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
         user_text = latest.content if latest else ""
 
+        # Check if there is a prior plan by reply_node in the conversation history
         has_prior_plan = any(
             m.node == NodeName.reply
             for m in state.get("raw_history", [])
         )
 
         prompt = INTENT_PROMPT.format(user_text=user_text, has_prior_plan=has_prior_plan)
-        llm_requests.labels(node="intent").inc()
         result: IntentOut = await self._llm.ainvoke([SystemMessage(content=INTENT_PERSONA), HumanMessage(content=prompt)])
 
-        if result.intent == UserIntent.undefined:
-            comment = result.comment or "I can help you plan software architecture. Could you describe a requirement or system you'd like to build?"
-            return {"user_intent": UserIntent.undefined, "comment": comment}
+        # increment the llm_requests metric
+        llm_requests.labels(node="intent").inc()
 
-        if result.intent == UserIntent.accept:
-            return await self._handle_accept(state)
-
-        return self._build_updates(state, result)
-
-    async def _handle_accept(self, state: ArchitectState) -> dict:
-        conversation_id = state.get("conversation_id", "")
-
+        match result.intent:
+            case UserIntent.undefined:
+                comment = result.comment or "I can help you plan software architecture. Could you describe a requirement or system you'd like to build?"
+                return {"user_intent": UserIntent.undefined, "comment": comment}
+            case UserIntent.plan:
+                return {"user_intent": UserIntent.plan}
+            case UserIntent.refine:
+                return self._handle_refine(state)
+            case UserIntent.accept:
+                return await self._handle_accept(state)
+        
+    def _handle_refine(self, state: ArchitectState) -> dict:
+        prior_solution: SolutionInterface | None = None
         for msg in reversed(state.get("raw_history", [])):
             if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
-                await self._publisher.publish(ACCEPT_EVENT_NAME, {
-                    "eventName": ACCEPT_EVENT_NAME,
-                    "meta": {"publisher": "architect-agent"},
-                    "data": {
-                        "conversationId": conversation_id,
-                        "content": msg.content.model_dump(),
-                    },
-                })
+                prior_solution = msg.content.epic.solution
+                break
+
+        return {"user_intent": UserIntent.refine, "prior_solution": prior_solution}
+
+    async def _handle_accept(self, state: ArchitectState) -> dict:
+        for msg in reversed(state.get("raw_history", [])):
+            if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
+                await self._publisher.publish(ACCEPT_EVENT_NAME, self._build_accept_event(state, msg))
                 break
 
         return {"user_intent": UserIntent.accept}
-
-    def _build_updates(self, state: ArchitectState, result: IntentOut) -> dict:
-        updates: dict = {"user_intent": UserIntent(result.intent)}
-
-        if result.intent == UserIntent.refine:
-            for msg in reversed(state.get("raw_history", [])):
-                if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
-                    updates["prior_solution"] = msg.content.epic.solution
-                    break
-
-        return updates
+    
+    def _build_accept_event(self, state: ArchitectState, msg: MessageInterface) -> dict:
+        return {
+            "eventName": ACCEPT_EVENT_NAME,
+            "meta": {"publisher": "architect-agent"},
+            "data": {
+                "conversationId": state.get("conversation_id", ""),
+                "content": msg.content.model_dump(),
+            },
+        }
