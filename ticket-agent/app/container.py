@@ -1,11 +1,13 @@
 import logging
 from functools import cached_property
+
 from langchain_anthropic import ChatAnthropic
+
 from app.agent.ticket_graph import TicketGraph
 from app.agent.tools.mcp_client import McpClient
 from app.agent.tools.mcp_tool_builder import McpToolBuilder
 from app.auth.keycloak_token_service import KeycloakTokenService
-from app.configs.event_configs import EventHandlerMap, ACCEPT_EVENT_NAME
+from app.configs.event_configs import ACCEPT_EVENT_NAME, EventHandlerMap
 from app.configs.settings import settings
 from app.events.handlers.accept_event_handler import AcceptEventHandler
 from app.events.message_processor import MessageProcessor

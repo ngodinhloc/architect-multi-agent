@@ -2,28 +2,52 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
+
 from app.configs.settings import settings
-from app.container import container
 from app.fast_mcp import fast_mcp, write_tools_to_redis
 from app.routers import health_router, jwks_router
 
-
 _STANDARD_LOG_ATTRS = {
-    "args", "created", "exc_info", "exc_text", "filename", "funcName",
-    "levelname", "levelno", "lineno", "message", "module", "msecs",
-    "msg", "name", "pathname", "process", "processName", "relativeCreated",
-    "stack_info", "thread", "threadName", "taskName",
+    "args",
+    "created",
+    "exc_info",
+    "exc_text",
+    "filename",
+    "funcName",
+    "levelname",
+    "levelno",
+    "lineno",
+    "message",
+    "module",
+    "msecs",
+    "msg",
+    "name",
+    "pathname",
+    "process",
+    "processName",
+    "relativeCreated",
+    "stack_info",
+    "thread",
+    "threadName",
+    "taskName",
 }
 
 
 _APP_ENV = os.environ.get("APP_ENV", "DEV")
 _SERVICE_NAME = os.environ.get("SERVICE_NAME", "mcp-server")
-_LEVEL_LABELS = {"DEBUG": "DEBUG", "INFO": "INFO", "WARNING": "WARN", "ERROR": "ERROR", "CRITICAL": "CRITICAL"}
+_LEVEL_LABELS = {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARNING": "WARN",
+    "ERROR": "ERROR",
+    "CRITICAL": "CRITICAL",
+}
 
 
 class _LogFormatter(logging.Formatter):
@@ -33,7 +57,7 @@ class _LogFormatter(logging.Formatter):
         exc = self.formatException(record.exc_info) if record.exc_info else None
         if _APP_ENV == "PROD":
             entry = {
-                "@timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+                "@timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
                 "log.level": record.levelname,
                 "message": msg,
                 "service.name": _SERVICE_NAME,
@@ -64,11 +88,13 @@ logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
 
 _mcp_app = fast_mcp.http_app(path="/")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with _mcp_app.lifespan(app):
         await write_tools_to_redis()
         yield
+
 
 app = FastAPI(title="Architect MCP Server", lifespan=lifespan)
 

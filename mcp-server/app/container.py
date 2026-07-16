@@ -1,5 +1,6 @@
 import logging
 from functools import cached_property
+
 from app.auth.keycloak_token_service import KeycloakTokenService
 from app.tools.epic_tool import EpicTool
 from app.tools.ticket_tool import TicketTool

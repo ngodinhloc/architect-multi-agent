@@ -1,8 +1,9 @@
 import json
 import logging
+
 from app.configs.event_configs import EventHandlerMap
-from app.events.event_builder import EventBuilder
 from app.events.contracts.consumer_message import ConsumerMessage
+from app.events.event_builder import EventBuilder
 
 
 class MessageProcessor:

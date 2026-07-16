@@ -1,6 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.contracts.chat_interface import (
-    ChatInterface, MessageInterface, ChatActor, AgentStatus, FinalReplyInterface,
+    AgentStatus,
+    ChatActor,
+    ChatInterface,
+    FinalReplyInterface,
+    MessageInterface,
 )
 
 
@@ -35,7 +40,7 @@ class ChatManager:
             MessageInterface(
                 actor=ChatActor.agent,
                 content=content,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 agentStatus=AgentStatus.has_replied,
             )
         )

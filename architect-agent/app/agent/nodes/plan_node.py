@@ -1,13 +1,18 @@
 import json
 import uuid
+
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agent.contracts.agent_interface import ArchitectState
-from app.metrics import llm_requests
 from app.agent.schemas.plan_schema import PlanOut
 from app.agent.templates.plan_templates import PLAN_PERSONA, PLAN_PROMPT, PLAN_PROMPT_REVISE
-from app.contracts.chat_interface import TicketInterface, RequirementInterface, AcceptanceCriterionInterface
+from app.contracts.chat_interface import (
+    AcceptanceCriterionInterface,
+    RequirementInterface,
+    TicketInterface,
+)
+from app.metrics import llm_requests
 
 
 class PlanNode:
@@ -32,7 +37,9 @@ class PlanNode:
 
         # increment the llm_requests metric
         llm_requests.labels(node="plan").inc()
-        result: PlanOut = await self._llm.ainvoke([SystemMessage(content=PLAN_PERSONA), HumanMessage(content=prompt)])
+        result: PlanOut = await self._llm.ainvoke(
+            [SystemMessage(content=PLAN_PERSONA), HumanMessage(content=prompt)]
+        )
 
         return {"tickets": self._build_tickets(result), "tickets_approved": False}
 
@@ -43,8 +50,13 @@ class PlanNode:
                 id=str(uuid.uuid4()),
                 epicId=epic_id,
                 name=t.name,
-                requirements=[RequirementInterface(requirement=r.requirement) for r in t.requirements],
-                acceptance_criteria=[AcceptanceCriterionInterface(criterion=a.criterion) for a in t.acceptance_criteria],
+                requirements=[
+                    RequirementInterface(requirement=r.requirement) for r in t.requirements
+                ],
+                acceptance_criteria=[
+                    AcceptanceCriterionInterface(criterion=a.criterion)
+                    for a in t.acceptance_criteria
+                ],
             )
             for t in result.tickets
         ]

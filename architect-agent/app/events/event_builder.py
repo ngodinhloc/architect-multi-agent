@@ -1,5 +1,5 @@
 from app.contracts.chat_interface import MessageInterface
-from app.events.contracts.event_interface import ChatEvent, ChatEventMeta, ChatEventData
+from app.events.contracts.event_interface import ChatEvent, ChatEventData, ChatEventMeta
 
 
 class EventBuilder:

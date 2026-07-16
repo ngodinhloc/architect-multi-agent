@@ -1,6 +1,13 @@
 import uuid
+
 from app.agent.contracts.agent_interface import ArchitectState
-from app.contracts.chat_interface import EpicInterface, NodeName, ReplyInterface, RequirementInterface, SolutionInterface
+from app.contracts.chat_interface import (
+    EpicInterface,
+    NodeName,
+    ReplyInterface,
+    RequirementInterface,
+    SolutionInterface,
+)
 
 
 class ReplyNode:
@@ -13,7 +20,9 @@ class ReplyNode:
         epic_name = requirement
         epic_requirements = [RequirementInterface(requirement=requirement)]
         if prior_solution:
-            epic_name, epic_requirements = self._resolve_epic_meta(state, epic_name, epic_requirements)
+            epic_name, epic_requirements = self._resolve_epic_meta(
+                state, epic_name, epic_requirements
+            )
 
         epic_id = tickets[0].epicId if tickets else str(uuid.uuid4())
         epic = EpicInterface(
@@ -25,7 +34,12 @@ class ReplyNode:
 
         return {"final_reply": ReplyInterface(epic=epic, tickets=tickets)}
 
-    def _resolve_epic_meta(self, state: ArchitectState, default_name: str, default_requirements: list[RequirementInterface]) -> tuple:
+    def _resolve_epic_meta(
+        self,
+        state: ArchitectState,
+        default_name: str,
+        default_requirements: list[RequirementInterface],
+    ) -> tuple:
         for msg in reversed(state.get("raw_history", [])):
             if msg.node == NodeName.reply and isinstance(msg.content, ReplyInterface):
                 epic = msg.content.epic

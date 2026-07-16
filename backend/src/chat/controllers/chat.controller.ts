@@ -22,7 +22,10 @@ export class ChatController {
   ) {}
 
   @Post('new')
-  newChat(@Req() req: Request, @Body() dto: NewChatDto): Promise<{ id: string }> {
+  newChat(
+    @Req() req: Request,
+    @Body() dto: NewChatDto,
+  ): Promise<{ id: string }> {
     this.metricsService.countChatRequest('new');
     return this.chatService.newChat(dto.message, req.user?.username);
   }
@@ -44,7 +47,7 @@ export class ChatController {
 
   @Get('history')
   getHistory(@Req() req: Request) {
-    return this.chatService.getHistory(req.user!.username);
+    return this.chatService.getHistory(req.user.username);
   }
 
   @Get(':id')

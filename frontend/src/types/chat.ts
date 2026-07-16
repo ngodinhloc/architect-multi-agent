@@ -1,6 +1,6 @@
-export type ChatStatus = "isActive" | "isStopped";
-export type AgentStatus = "isThinking" | "hasReplied";
-export type ChatActor = "User" | "Agent";
+export type ChatStatus = 'isActive' | 'isStopped';
+export type AgentStatus = 'isThinking' | 'hasReplied';
+export type ChatActor = 'User' | 'Agent';
 
 export interface FeatureInterface {
   feature: string;

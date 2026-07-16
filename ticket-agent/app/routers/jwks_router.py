@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.auth.jwks_service import jwks_service
 
 router = APIRouter()

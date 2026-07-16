@@ -15,7 +15,6 @@ async function bootstrap() {
 
   app.enableCors({ origin: corsOrigins, credentials: true });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.useWebSocketAdapter(new WsAdapter(app) as any);
 
   app.useGlobalPipes(

@@ -1,4 +1,5 @@
 import httpx
+
 from app.auth.keycloak_token_service import KeycloakTokenService
 from app.configs.settings import settings
 

@@ -1,4 +1,9 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, OnGatewayDisconnect } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
 import { Injectable } from '@nestjs/common';
 import { Server, WebSocket } from 'ws';
 import { RedisService } from '../../redis/services/redis.service';
@@ -25,12 +30,19 @@ export class ChatGateway implements OnGatewayDisconnect {
     const intervalId = setInterval(async () => {
       if (++polls > MAX_POLLS) {
         this.clearSubscription(client);
-        client.send(JSON.stringify({ event: 'error', data: 'Timed out waiting for agent.' }));
+        client.send(
+          JSON.stringify({
+            event: 'error',
+            data: 'Timed out waiting for agent.',
+          }),
+        );
         return;
       }
 
       try {
-        const chat = await this.redisService.getJson<ChatInterface>(`chat:${chatId}`);
+        const chat = await this.redisService.getJson<ChatInterface>(
+          `chat:${chatId}`,
+        );
         if (!chat) return;
 
         client.send(JSON.stringify({ event: 'chat-update', data: chat }));

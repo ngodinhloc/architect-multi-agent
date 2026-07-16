@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { SignJWT, importPKCS8 } from 'jose';
-import { createPrivateKey, createPublicKey, createHash, KeyObject } from 'crypto';
+import {
+  createPrivateKey,
+  createPublicKey,
+  createHash,
+  KeyObject,
+} from 'crypto';
 import { AppLogger } from '../../common/logger/services/app-logger';
 
 const REFRESH_BUFFER_SECONDS = 30;
-const CLIENT_ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+const CLIENT_ASSERTION_TYPE =
+  'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
 
 @Injectable()
 export class KeycloakTokenService {
@@ -23,7 +29,10 @@ export class KeycloakTokenService {
     const realm = process.env.KEYCLOAK_REALM ?? 'architect-multi-agent';
     this.tokenUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/token`;
     this.clientId = process.env.KEYCLOAK_CLIENT_ID ?? 'backend';
-    this.privateKeyPem = (process.env.PRIVATE_KEY_PEM ?? '').replace(/\\n/g, '\n');
+    this.privateKeyPem = (process.env.PRIVATE_KEY_PEM ?? '').replace(
+      /\\n/g,
+      '\n',
+    );
     this.kid = this.computeKid();
   }
 
@@ -57,7 +66,10 @@ export class KeycloakTokenService {
   async getToken(): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
     if (this.accessToken && now < this.expiresAt - REFRESH_BUFFER_SECONDS) {
-      this.logger.debug('KeycloakTokenService.getToken: Serving cached token', { clientId: this.clientId, ttlSeconds: this.expiresAt - now });
+      this.logger.debug('KeycloakTokenService.getToken: Serving cached token', {
+        clientId: this.clientId,
+        ttlSeconds: this.expiresAt - now,
+      });
       return this.accessToken;
     }
     // Coalesce concurrent callers into one in-flight request
@@ -81,12 +93,21 @@ export class KeycloakTokenService {
     const resp = await fetch(this.tokenUrl, { method: 'POST', body });
     if (!resp.ok) {
       const errBody = await resp.text().catch(() => '');
-      throw new Error(`Keycloak token request failed: ${resp.status} ${errBody}`);
+      throw new Error(
+        `Keycloak token request failed: ${resp.status} ${errBody}`,
+      );
     }
-    const data = (await resp.json()) as { access_token: string; expires_in: number };
+    const data = (await resp.json()) as {
+      access_token: string;
+      expires_in: number;
+    };
     this.accessToken = data.access_token;
     this.expiresAt = now + data.expires_in;
-    this.logger.log('KeycloakTokenService.getToken: Token acquired', { clientId: this.clientId, expiresIn: data.expires_in, tokenUrl: this.tokenUrl });
+    this.logger.log('KeycloakTokenService.getToken: Token acquired', {
+      clientId: this.clientId,
+      expiresIn: data.expires_in,
+      tokenUrl: this.tokenUrl,
+    });
     return this.accessToken;
   }
 }

@@ -1,10 +1,12 @@
 import asyncio
+import logging
 import time
 import uuid
-import logging
+
 import httpx
 import jwt
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
 from app.configs.settings import settings
 
 logger = logging.getLogger("keycloak_token_service")
@@ -45,7 +47,11 @@ class KeycloakTokenService:
             self._expires_at = time.time() + response["expires_in"]
             logger.info(
                 "KeycloakTokenService.get_token: Token acquired",
-                extra={"client_id": self._client_id, "expires_in": response["expires_in"], "token_url": self._token_url},
+                extra={
+                    "client_id": self._client_id,
+                    "expires_in": response["expires_in"],
+                    "token_url": self._token_url,
+                },
             )
             return self._access_token
 

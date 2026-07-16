@@ -1,7 +1,8 @@
 import logging
-from app.services.chat_service import ChatService
+
 from app.contracts.chat_interface import ChatRequest
 from app.events.contracts.event_interface import ChatEvent
+from app.services.chat_service import ChatService
 
 
 class ChatEventHandler:

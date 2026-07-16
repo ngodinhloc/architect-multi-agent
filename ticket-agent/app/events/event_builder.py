@@ -1,4 +1,4 @@
-from app.events.contracts.event_interface import AcceptEvent, AcceptEventMeta, AcceptEventData
+from app.events.contracts.event_interface import AcceptEvent, AcceptEventData, AcceptEventMeta
 
 
 class EventBuilder:

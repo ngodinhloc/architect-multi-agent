@@ -2,7 +2,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { decodeJwt } from 'jose';
 import { AppLogger } from '../../common/logger/services/app-logger';
-import { AuthUser } from '../contracts/auth.interface'
+import { AuthUser } from '../contracts/auth.interface';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -13,14 +13,16 @@ declare global {
   }
 }
 
-const PUBLIC_PATHS = new Set(['/api/health', '/api/.well-known/jwks', '/metrics']);
+const PUBLIC_PATHS = new Set([
+  '/api/health',
+  '/api/.well-known/jwks',
+  '/metrics',
+]);
 const TOKEN_COOKIE_NAME = 'kc_token';
 
 @Injectable()
 export class KeycloakAuthMiddleware implements NestMiddleware {
-  constructor(
-    private readonly logger: AppLogger
-  ) {}
+  constructor(private readonly logger: AppLogger) {}
 
   use(req: Request, res: Response, next: NextFunction) {
     const path = req.originalUrl.split('?')[0];
@@ -30,7 +32,9 @@ export class KeycloakAuthMiddleware implements NestMiddleware {
 
     const token = this.extractToken(req);
     if (!token) {
-      this.logger.warn('KeycloakAuthMiddleware: Missing kc_token cookie', { path });
+      this.logger.warn('KeycloakAuthMiddleware: Missing kc_token cookie', {
+        path,
+      });
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
@@ -56,7 +60,10 @@ export class KeycloakAuthMiddleware implements NestMiddleware {
     return {
       username: (payload['preferred_username'] as string) ?? '',
       email: (payload['email'] as string) ?? '',
-      name: (payload['name'] as string) ?? (payload['preferred_username'] as string) ?? '',
+      name:
+        (payload['name'] as string) ??
+        (payload['preferred_username'] as string) ??
+        '',
     };
   }
 
@@ -66,6 +73,8 @@ export class KeycloakAuthMiddleware implements NestMiddleware {
       .split(';')
       .map((c) => c.trim())
       .find((c) => c.startsWith(`${TOKEN_COOKIE_NAME}=`));
-    return cookie ? decodeURIComponent(cookie.slice(TOKEN_COOKIE_NAME.length + 1)) : null;
+    return cookie
+      ? decodeURIComponent(cookie.slice(TOKEN_COOKIE_NAME.length + 1))
+      : null;
   }
 }

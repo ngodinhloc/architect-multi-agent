@@ -1,5 +1,12 @@
 from langgraph.graph import MessagesState
-from app.contracts.chat_interface import MessageInterface, SolutionInterface, TicketInterface, ReplyInterface, UserIntent
+
+from app.contracts.chat_interface import (
+    MessageInterface,
+    ReplyInterface,
+    SolutionInterface,
+    TicketInterface,
+    UserIntent,
+)
 
 
 class ArchitectState(MessagesState):

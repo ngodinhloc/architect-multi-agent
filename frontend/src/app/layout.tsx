@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
-import Sidebar from "@/components/Sidebar";
-import { KeycloakProvider } from "@/components/KeycloakProvider";
-import "./globals.css";
+import type { Metadata } from 'next';
+import Sidebar from '@/components/Sidebar';
+import { KeycloakProvider } from '@/components/KeycloakProvider';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Multi-Agent Architect",
-  description: "AI-powered software architect — solution design and ticket planning",
+  title: 'Multi-Agent Architect',
+  description:
+    'AI-powered software architect — solution design and ticket planning',
 };
 
 export default function RootLayout({

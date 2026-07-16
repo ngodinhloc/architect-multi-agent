@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChatEventInterface } from '../contracts/chat-event.interface';
 import { CHAT_EVENT_NAME } from '../contracts/chat-event.interface';
@@ -34,16 +39,25 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
 
       connection.on('error', (err) => this.handleDisconnect(err));
-      connection.on('close', () => this.handleDisconnect(new Error('Connection closed')));
+      connection.on('close', () =>
+        this.handleDisconnect(new Error('Connection closed')),
+      );
 
       this.connection = connection;
       this.channel = channel;
       this.reconnecting = false;
-      this.logger.log('RabbitMQService.connect: Connected to RabbitMQ', { conversationId: null, exchange: EXCHANGE, queue: QUEUE });
+      this.logger.log('RabbitMQService.connect: Connected to RabbitMQ', {
+        conversationId: null,
+        exchange: EXCHANGE,
+        queue: QUEUE,
+      });
     } catch (err) {
       if (attempt >= maxAttempts) throw err;
       const delay = Math.min(1000 * attempt, 10000);
-      this.logger.warn(`RabbitMQService.connect: RabbitMQ not ready, retrying in ${delay}ms…`, { conversationId: null, attempt, maxAttempts });
+      this.logger.warn(
+        `RabbitMQService.connect: RabbitMQ not ready, retrying in ${delay}ms…`,
+        { conversationId: null, attempt, maxAttempts },
+      );
       await new Promise((r) => setTimeout(r, delay));
       return this.connect(attempt + 1);
     }
@@ -54,9 +68,15 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     this.connection = null;
     if (this.closing || this.reconnecting) return;
     this.reconnecting = true;
-    this.logger.error(`RabbitMQService: connection lost, reconnecting: ${err.message}`, { conversationId: null });
+    this.logger.error(
+      `RabbitMQService: connection lost, reconnecting: ${err.message}`,
+      { conversationId: null },
+    );
     void this.connect().catch((reconnectErr) => {
-      this.logger.error(`RabbitMQService: failed to reconnect: ${reconnectErr}`, { conversationId: null });
+      this.logger.error(
+        `RabbitMQService: failed to reconnect: ${reconnectErr}`,
+        { conversationId: null },
+      );
       this.reconnecting = false;
     });
   }
@@ -69,11 +89,21 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   publish(event: ChatEventInterface): void {
     if (!this.channel) {
-      this.logger.error('RabbitMQService.publish: RabbitMQ channel not ready', { conversationId: event.data.conversationId });
+      this.logger.error('RabbitMQService.publish: RabbitMQ channel not ready', {
+        conversationId: event.data.conversationId,
+      });
       return;
     }
-    this.channel.publish(EXCHANGE, ROUTING_KEY, Buffer.from(JSON.stringify(event)), { persistent: true });
+    this.channel.publish(
+      EXCHANGE,
+      ROUTING_KEY,
+      Buffer.from(JSON.stringify(event)),
+      { persistent: true },
+    );
     this.metricsService.countEventPublished();
-    this.logger.log('RabbitMQService.publish: Published', { conversationId: event.data.conversationId, exchange: EXCHANGE });
+    this.logger.log('RabbitMQService.publish: Published', {
+      conversationId: event.data.conversationId,
+      exchange: EXCHANGE,
+    });
   }
 }

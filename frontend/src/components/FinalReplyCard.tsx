@@ -1,10 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { CheckCircle, Loader2 } from "lucide-react";
-import { FinalReplyInterface, EpicInterface, TicketInterface } from "@/types/chat";
-import { getEpic, getEpicTickets } from "@/lib/api";
-import PlanCard from "./PlanCard";
+import { useEffect, useState } from 'react';
+import { CheckCircle, Loader2 } from 'lucide-react';
+import {
+  FinalReplyInterface,
+  EpicInterface,
+  TicketInterface,
+} from '@/types/chat';
+import { getEpic, getEpicTickets } from '@/lib/api';
+import PlanCard from './PlanCard';
 
 interface FinalReplyCardProps {
   reply: FinalReplyInterface;
@@ -29,13 +33,16 @@ export default function FinalReplyCard({ reply }: FinalReplyCardProps) {
           setTickets(ticketsData);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : 'Failed to load');
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [reply.epicId]);
 
   if (loading) {
@@ -50,7 +57,7 @@ export default function FinalReplyCard({ reply }: FinalReplyCardProps) {
   if (error || !epic) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400">
-        {error ?? "Epic not found"}
+        {error ?? 'Epic not found'}
       </div>
     );
   }
@@ -59,7 +66,8 @@ export default function FinalReplyCard({ reply }: FinalReplyCardProps) {
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
         <CheckCircle size={16} />
-        Epic and {tickets.length} ticket{tickets.length !== 1 ? "s" : ""} created
+        Epic and {tickets.length} ticket{tickets.length !== 1 ? 's' : ''}{' '}
+        created
       </div>
       <PlanCard reply={{ epic, tickets }} showLinks />
     </div>

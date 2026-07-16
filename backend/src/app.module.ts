@@ -11,7 +11,16 @@ import { KeycloakAuthMiddleware } from './auth/middlewares/keycloak-auth.middlew
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 
 @Module({
-  imports: [DatabaseModule, RedisModule, RabbitMQModule, ChatModule, HealthModule, TicketModule, AuthModule, MetricsModule],
+  imports: [
+    DatabaseModule,
+    RedisModule,
+    RabbitMQModule,
+    ChatModule,
+    HealthModule,
+    TicketModule,
+    AuthModule,
+    MetricsModule,
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

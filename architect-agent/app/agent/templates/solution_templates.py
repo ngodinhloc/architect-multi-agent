@@ -11,8 +11,7 @@ Be specific and practical. Include all necessary components (frontend, backend, 
 SOLUTION_PROMPT_NEW = "Requirement: {requirement}"
 
 SOLUTION_PROMPT_REFINE = (
-    "Refinement request: {requirement}\n\n"
-    "Current solution to refine:\n{prior_solution}"
+    "Refinement request: {requirement}\n\nCurrent solution to refine:\n{prior_solution}"
 )
 
 SOLUTION_PROMPT_REVISE = (

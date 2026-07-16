@@ -1,10 +1,17 @@
-from datetime import datetime, timezone
-from fastapi import HTTPException
-from app.contracts.chat_interface import (
-    ChatInterface, MessageInterface, ChatActor, AgentStatus,
-    ReplyInterface, FinalReplyInterface, UserIntent, NodeName,
-)
+from datetime import UTC, datetime
 
+from fastapi import HTTPException
+
+from app.contracts.chat_interface import (
+    AgentStatus,
+    ChatActor,
+    ChatInterface,
+    FinalReplyInterface,
+    MessageInterface,
+    NodeName,
+    ReplyInterface,
+    UserIntent,
+)
 
 NODE_LABELS: dict[NodeName, str] = {
     NodeName.solution: "Designing solution architecture...",
@@ -29,12 +36,15 @@ class ChatManager:
     async def save_chat(self, key: str, chat_obj: ChatInterface) -> None:
         await self._redis.set(key, chat_obj.model_dump_json())
 
-    def append_thinking_message(self, chat_obj: ChatInterface, node_name: str, node_output: dict = {}) -> None:
+    def append_thinking_message(
+        self, chat_obj: ChatInterface, node_name: str, node_output: dict = {}
+    ) -> None:
         node = NodeName(node_name)
 
         if node_name == NodeName.solution_review:
             self._append_review(
-                chat_obj, node=node,
+                chat_obj,
+                node=node,
                 review_label="Reviewing solution architecture...",
                 approved=node_output.get("solution_approved", False),
                 comments=node_output.get("solution_review_comments", []),
@@ -43,7 +53,8 @@ class ChatManager:
 
         if node_name == NodeName.plan_review:
             self._append_review(
-                chat_obj, node=node,
+                chat_obj,
+                node=node,
                 review_label="Reviewing development tickets...",
                 approved=node_output.get("tickets_approved", False),
                 comments=node_output.get("ticket_review_comments", []),
@@ -56,13 +67,20 @@ class ChatManager:
                 MessageInterface(
                     actor=ChatActor.agent,
                     content=label,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     agentStatus=AgentStatus.is_thinking,
                     node=node,
                 )
             )
 
-    def _append_review(self, chat_obj: ChatInterface, node: NodeName | None, review_label: str, approved: bool, comments: list[str]) -> None:
+    def _append_review(
+        self,
+        chat_obj: ChatInterface,
+        node: NodeName | None,
+        review_label: str,
+        approved: bool,
+        comments: list[str],
+    ) -> None:
         status = "Approved" if approved else "Needs revision"
         content = f"{review_label} → Result: {status}"
         if comments:
@@ -71,7 +89,7 @@ class ChatManager:
             MessageInterface(
                 actor=ChatActor.agent,
                 content=content,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 agentStatus=AgentStatus.is_thinking,
                 node=node,
             )
@@ -86,7 +104,10 @@ class ChatManager:
         return NODE_LABELS.get(node_name)
 
     async def append_reply_message(
-        self, key: str, chat_obj: ChatInterface, error: str | None,
+        self,
+        key: str,
+        chat_obj: ChatInterface,
+        error: str | None,
         final_reply: ReplyInterface | FinalReplyInterface | str | None,
         node: NodeName = NodeName.reply,
     ) -> None:
@@ -102,7 +123,7 @@ class ChatManager:
             MessageInterface(
                 actor=ChatActor.agent,
                 content=content,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 agentStatus=AgentStatus.has_replied,
                 node=node,
             )

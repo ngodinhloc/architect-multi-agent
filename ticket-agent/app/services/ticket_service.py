@@ -1,14 +1,18 @@
-import logging
 import json
+import logging
+
 from langchain_core.messages import HumanMessage
+
 from app.agent.ticket_graph import TicketGraph
-from app.contracts.chat_interface import TicketRequest, FinalReplyInterface
+from app.contracts.chat_interface import FinalReplyInterface, TicketRequest
 from app.services.chat_manager import ChatManager
 from app.services.redis_helper import RedisHelper
 
 
 class TicketService:
-    def __init__(self, ticket_graph: TicketGraph, chat_manager: ChatManager, logger: logging.Logger):
+    def __init__(
+        self, ticket_graph: TicketGraph, chat_manager: ChatManager, logger: logging.Logger
+    ):
         self._graph = ticket_graph
         self._chat_manager = chat_manager
         self._logger = logger

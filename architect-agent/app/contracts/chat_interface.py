@@ -1,6 +1,6 @@
-from enum import Enum
 from datetime import datetime
-from typing import Optional, Union
+from enum import Enum
+
 from pydantic import BaseModel
 
 
@@ -84,18 +84,18 @@ class FinalReplyInterface(BaseModel):
 
 class MessageInterface(BaseModel):
     actor: ChatActor
-    content: Union[str, ReplyInterface, FinalReplyInterface]
-    agentStatus: Optional[AgentStatus] = None
-    timestamp: Optional[datetime] = None
-    node: Optional[NodeName] = None
+    content: str | ReplyInterface | FinalReplyInterface
+    agentStatus: AgentStatus | None = None
+    timestamp: datetime | None = None
+    node: NodeName | None = None
 
 
 class ChatInterface(BaseModel):
     id: str
-    title: Optional[str] = None
+    title: str | None = None
     messages: list[MessageInterface] = []
     status: ChatStatus
-    agentStatus: Optional[AgentStatus] = None
+    agentStatus: AgentStatus | None = None
 
 
 class ChatRequest(BaseModel):

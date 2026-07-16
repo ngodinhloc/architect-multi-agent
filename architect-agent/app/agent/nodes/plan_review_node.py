@@ -1,6 +1,7 @@
 import json
+
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agent.contracts.agent_interface import ArchitectState
 from app.agent.schemas.plan_review_schema import PlanReviewOut
@@ -22,7 +23,9 @@ class PlanReviewNode:
         )
         # increment the llm_requests metric
         llm_requests.labels(node="plan_review").inc()
-        result: PlanReviewOut = await self._llm.ainvoke([SystemMessage(content=PLAN_REVIEW_PERSONA), HumanMessage(content=prompt)])
+        result: PlanReviewOut = await self._llm.ainvoke(
+            [SystemMessage(content=PLAN_REVIEW_PERSONA), HumanMessage(content=prompt)]
+        )
 
         return {
             "tickets_approved": result.approved,

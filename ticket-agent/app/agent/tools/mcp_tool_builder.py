@@ -1,8 +1,10 @@
 import json
 import logging
 from typing import Any, Optional
-from pydantic import create_model, Field
+
 from langchain_core.tools import StructuredTool
+from pydantic import Field, create_model
+
 from app.agent.tools.mcp_client import McpClient
 from app.services.redis_client import RedisClient
 
@@ -36,7 +38,10 @@ class McpToolBuilder:
             client = self._mcp_client_factory(provider.get("providerHost", ""))
             for tool_spec in provider.get("tools", []):
                 tools.append(self._build_tool(tool_spec, client))
-                logger.info("McpToolBuilder.build: Registered tool", extra={"tool": tool_spec["name"], "provider": provider_name})
+                logger.info(
+                    "McpToolBuilder.build: Registered tool",
+                    extra={"tool": tool_spec["name"], "provider": provider_name},
+                )
 
         return tools
 
@@ -54,7 +59,10 @@ class McpToolBuilder:
             if field_name in required:
                 fields[field_name] = (py_type, Field(description=field_desc))
             else:
-                fields[field_name] = (Optional[py_type], Field(default=None, description=field_desc))
+                fields[field_name] = (
+                    Optional[py_type],
+                    Field(default=None, description=field_desc),
+                )
 
         DynamicInput = create_model(f"{name}_input", **fields)
 
@@ -70,4 +78,5 @@ class McpToolBuilder:
         async def run(**kwargs) -> str:
             result = await mcp_client.call(name, kwargs)
             return json.dumps(result)
+
         return run

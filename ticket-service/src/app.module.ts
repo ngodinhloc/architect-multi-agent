@@ -6,6 +6,12 @@ import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
-  imports: [DatabaseModule, EpicModule, TicketModule, HealthModule, MetricsModule],
+  imports: [
+    DatabaseModule,
+    EpicModule,
+    TicketModule,
+    HealthModule,
+    MetricsModule,
+  ],
 })
 export class AppModule {}

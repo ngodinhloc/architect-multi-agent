@@ -1,16 +1,23 @@
-import json
 import logging
+
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
+
 from app.contracts.chat_interface import (
-    ChatRequest, ReplyInterface, FinalReplyInterface, UserIntent, NodeName,
+    ChatRequest,
+    FinalReplyInterface,
+    NodeName,
+    ReplyInterface,
+    UserIntent,
 )
 from app.services.chat_manager import ChatManager
 from app.services.redis_helper import RedisHelper
 
 
 class ChatService:
-    def __init__(self, agent_graph: CompiledStateGraph, chat_manager: ChatManager, logger: logging.Logger):
+    def __init__(
+        self, agent_graph: CompiledStateGraph, chat_manager: ChatManager, logger: logging.Logger
+    ):
         self._graph = agent_graph
         self._logger = logger
         self._message_manager = chat_manager
@@ -73,14 +80,18 @@ class ChatService:
             return
 
         if user_intent == UserIntent.undefined:
-            await self._message_manager.append_reply_message(key, chat_obj, error, comment, NodeName.intent)
+            await self._message_manager.append_reply_message(
+                key, chat_obj, error, comment, NodeName.intent
+            )
             return
 
         parsed_reply = self._parse_reply(final_reply)
         await self._message_manager.append_reply_message(key, chat_obj, error, parsed_reply)
 
     @staticmethod
-    def _parse_reply(raw: ReplyInterface | dict | None) -> ReplyInterface | FinalReplyInterface | None:
+    def _parse_reply(
+        raw: ReplyInterface | dict | None,
+    ) -> ReplyInterface | FinalReplyInterface | None:
         if raw is None:
             return None
         if isinstance(raw, (ReplyInterface, FinalReplyInterface)):

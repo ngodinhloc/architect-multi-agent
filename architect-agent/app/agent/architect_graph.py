@@ -1,15 +1,15 @@
 from langchain_anthropic import ChatAnthropic
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
+
 from app.agent.contracts.agent_interface import ArchitectState
-from app.contracts.chat_interface import UserIntent, NodeName
 from app.agent.nodes.intent_node import IntentNode
-from app.agent.nodes.solution_node import SolutionNode
-from app.agent.nodes.solution_review_node import SolutionReviewNode
 from app.agent.nodes.plan_node import PlanNode
 from app.agent.nodes.plan_review_node import PlanReviewNode
 from app.agent.nodes.reply_node import ReplyNode
+from app.agent.nodes.solution_node import SolutionNode
+from app.agent.nodes.solution_review_node import SolutionReviewNode
+from app.contracts.chat_interface import NodeName, UserIntent
 from app.events.rabbitmq_publisher import RabbitMQPublisher
-
 
 # ┌────────────────────────────────────────────────────────────────────┐
 # │                         ArchitectGraph                             │
@@ -64,7 +64,12 @@ class ArchitectGraph:
         graph.add_conditional_edges(
             NodeName.intent,
             self._route_intent,
-            {"accept": END, "undefined": END, "plan": NodeName.solution, "refine": NodeName.solution},
+            {
+                "accept": END,
+                "undefined": END,
+                "plan": NodeName.solution,
+                "refine": NodeName.solution,
+            },
         )
 
         graph.add_edge(NodeName.solution, NodeName.solution_review)
@@ -96,4 +101,3 @@ class ArchitectGraph:
     @staticmethod
     def _route_plan_review(state: ArchitectState) -> str:
         return "approved" if state.get("tickets_approved") else "rejected"
-

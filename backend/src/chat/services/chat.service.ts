@@ -22,7 +22,10 @@ export class ChatService {
     private readonly messageService: MessageService,
   ) {}
 
-  async newChat(message: string, username: string): Promise<ChatCreatedResponse> {
+  async newChat(
+    message: string,
+    username: string,
+  ): Promise<ChatCreatedResponse> {
     const conversation = await this.conversationRepo.new(username, message);
     const chatObject: ChatInterface = {
       id: conversation.uuid,
@@ -31,17 +34,25 @@ export class ChatService {
       status: ChatStatus.isActive,
       agentStatus: AgentStatus.isThinking,
     };
-    
-    await this.redisService.setJson(this.redisKey(chatObject.id), chatObject, 7200);
+
+    await this.redisService.setJson(
+      this.redisKey(chatObject.id),
+      chatObject,
+      7200,
+    );
     this.messageService.publish(chatObject.id, message, []);
     return { id: chatObject.id };
   }
 
-  async continueChat(id: string, message: string): Promise<ChatContinueResponse> {
+  async continueChat(
+    id: string,
+    message: string,
+  ): Promise<ChatContinueResponse> {
     let existingMessages: MessageInterface[];
     let title: string;
 
-    const cached: ChatInterface | null = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
+    const cached: ChatInterface | null =
+      await this.redisService.getJson<ChatInterface>(this.redisKey(id));
     if (cached) {
       existingMessages = cached.messages;
       title = cached.title;
@@ -74,7 +85,9 @@ export class ChatService {
   }
 
   async stopChat(id: string): Promise<ChatStopResponse> {
-    const current = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
+    const current = await this.redisService.getJson<ChatInterface>(
+      this.redisKey(id),
+    );
     if (!current) {
       throw new NotFoundException(`Conversation ${id} not found`);
     }
@@ -90,7 +103,9 @@ export class ChatService {
   }
 
   async getChat(id: string): Promise<ChatInterface> {
-    const cached = await this.redisService.getJson<ChatInterface>(this.redisKey(id));
+    const cached = await this.redisService.getJson<ChatInterface>(
+      this.redisKey(id),
+    );
     if (cached) {
       if (cached.agentStatus === AgentStatus.hasReplied) {
         await this.conversationRepo.update(id, cached.messages);
@@ -114,7 +129,11 @@ export class ChatService {
 
   async getHistory(username: string): Promise<ChatHistoryInterface[]> {
     const conversations = await this.conversationRepo.findByUsername(username);
-    return conversations.map((c) => ({ id: c.uuid, title: c.title ?? '', createdAt: c.createdAt }));
+    return conversations.map((c) => ({
+      id: c.uuid,
+      title: c.title ?? '',
+      createdAt: c.createdAt,
+    }));
   }
 
   private redisKey(id: string): string {

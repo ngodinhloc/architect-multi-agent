@@ -1,8 +1,10 @@
 import json
 import logging
+
 import httpx
 from fastmcp import Client
 from mcp.types import TextContent
+
 from app.auth.keycloak_token_service import KeycloakTokenService
 
 logger = logging.getLogger("mcp_tools")

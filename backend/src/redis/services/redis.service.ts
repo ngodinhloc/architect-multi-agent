@@ -8,17 +8,19 @@ export const CHAT_TTL_SECONDS = 7200;
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client!: Redis;
 
-  constructor(
-    private readonly logger: AppLogger,
-  ) {
-  }
+  constructor(private readonly logger: AppLogger) {}
 
   onModuleInit() {
     this.client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
       lazyConnect: false,
       maxRetriesPerRequest: 3,
     });
-    this.client.on('error', (err) => this.logger.error('RedisService.onModuleInit: Redis error', { conversationId: null, error: String(err) }));
+    this.client.on('error', (err) =>
+      this.logger.error('RedisService.onModuleInit: Redis error', {
+        conversationId: null,
+        error: String(err),
+      }),
+    );
   }
 
   async onModuleDestroy() {
@@ -31,7 +33,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return JSON.parse(raw) as T;
   }
 
-  async setJson(key: string, value: unknown, ttlSeconds = CHAT_TTL_SECONDS): Promise<void> {
+  async setJson(
+    key: string,
+    value: unknown,
+    ttlSeconds = CHAT_TTL_SECONDS,
+  ): Promise<void> {
     await this.client.set(key, JSON.stringify(value), 'EX', ttlSeconds);
   }
 

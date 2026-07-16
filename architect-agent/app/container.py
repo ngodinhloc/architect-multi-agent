@@ -1,16 +1,18 @@
 import logging
 from functools import cached_property
+
 from langchain_anthropic import ChatAnthropic
 from langgraph.graph.state import CompiledStateGraph
+
 from app.agent.architect_graph import ArchitectGraph
-from app.configs.event_configs import EventHandlerMap, CHAT_EVENT_NAME
+from app.configs.event_configs import CHAT_EVENT_NAME, EventHandlerMap
 from app.configs.settings import settings
 from app.events.handlers.chat_event_handler import ChatEventHandler
 from app.events.message_processor import MessageProcessor
 from app.events.rabbitmq_consumer import RabbitMQConsumer
 from app.events.rabbitmq_publisher import RabbitMQPublisher
-from app.services.chat_service import ChatService
 from app.services.chat_manager import ChatManager
+from app.services.chat_service import ChatService
 from app.services.redis_client import RedisClient
 
 

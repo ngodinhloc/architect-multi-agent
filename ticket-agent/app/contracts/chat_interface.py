@@ -1,6 +1,6 @@
-from enum import Enum
 from datetime import datetime
-from typing import Optional, Union
+from enum import Enum
+
 from pydantic import BaseModel
 
 
@@ -27,16 +27,16 @@ class FinalReplyInterface(BaseModel):
 class MessageInterface(BaseModel):
     actor: ChatActor
     timestamp: datetime
-    content: Union[str, dict, FinalReplyInterface]
-    agentStatus: Optional[AgentStatus] = None
+    content: str | dict | FinalReplyInterface
+    agentStatus: AgentStatus | None = None
 
 
 class ChatInterface(BaseModel):
     id: str
-    title: Optional[str] = None
+    title: str | None = None
     messages: list[MessageInterface] = []
     status: ChatStatus
-    agentStatus: Optional[AgentStatus] = None
+    agentStatus: AgentStatus | None = None
 
 
 class TicketRequest(BaseModel):

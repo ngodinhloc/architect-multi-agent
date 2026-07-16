@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RabbitMQService } from '../../rabbitmq/services/rabbitmq.service';
-import { CHAT_EVENT_NAME, type ChatEventInterface } from '../../rabbitmq/contracts/chat-event.interface';
+import {
+  CHAT_EVENT_NAME,
+  type ChatEventInterface,
+} from '../../rabbitmq/contracts/chat-event.interface';
 import { MessageInterface } from '../contracts/chat.interface';
 
 @Injectable()

@@ -1,5 +1,6 @@
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
+
 from app.agent.contracts.agent_interface import TicketState
 from app.agent.templates.create_node_templates import CREATE_NODE_PERSONA
 from app.metrics import llm_requests

@@ -1,12 +1,9 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { TicketClient } from '../services/ticket.client';
 
-
 @Controller('api')
 export class TicketProxyController {
-  constructor(
-    private readonly ticketClient: TicketClient
-  ) {}
+  constructor(private readonly ticketClient: TicketClient) {}
 
   @Get('epic/:id')
   async getEpic(@Param('id') id: string) {

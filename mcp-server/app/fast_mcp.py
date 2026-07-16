@@ -1,7 +1,9 @@
 import json
 import logging
+
 from fastmcp import FastMCP
 from redis.asyncio import Redis
+
 from app.configs.settings import settings
 from app.container import container
 from app.metrics import tool_requests

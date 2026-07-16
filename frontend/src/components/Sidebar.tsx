@@ -1,11 +1,18 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { PanelLeft, PanelRight, Plus, MessageSquare, LogOut, User } from "lucide-react";
-import { getHistory } from "@/lib/api";
-import { ConversationSummary } from "@/types/chat";
-import { useKeycloak } from "@/components/KeycloakProvider";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  PanelLeft,
+  PanelRight,
+  Plus,
+  MessageSquare,
+  LogOut,
+  User,
+} from 'lucide-react';
+import { getHistory } from '@/lib/api';
+import { ConversationSummary } from '@/types/chat';
+import { useKeycloak } from '@/components/KeycloakProvider';
 
 export default function Sidebar() {
   const router = useRouter();
@@ -15,10 +22,13 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (!user) return;
-    const refresh = () => getHistory().then(setHistory).catch(() => {});
+    const refresh = () =>
+      getHistory()
+        .then(setHistory)
+        .catch(() => {});
     refresh();
-    window.addEventListener("chat-completed", refresh);
-    return () => window.removeEventListener("chat-completed", refresh);
+    window.addEventListener('chat-completed', refresh);
+    return () => window.removeEventListener('chat-completed', refresh);
   }, [user]);
 
   function handleNewChat() {
@@ -28,14 +38,14 @@ export default function Sidebar() {
   return (
     <aside
       className={`flex flex-col h-screen shrink-0 border-r border-zinc-200 bg-zinc-50 transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-950 ${
-        isOpen ? "w-64" : "w-14"
+        isOpen ? 'w-64' : 'w-14'
       }`}
     >
       <div className="flex items-center gap-2 border-b border-zinc-200 p-3 dark:border-zinc-800">
         <button
           onClick={() => setIsOpen((v) => !v)}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-          aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           {isOpen ? <PanelLeft size={16} /> : <PanelRight size={16} />}
         </button>
@@ -59,13 +69,16 @@ export default function Sidebar() {
         {history.map((item) => (
           <button
             key={item.id}
-            title={item.title || "Untitled"}
+            title={item.title || 'Untitled'}
             onClick={() => router.push(`/?chat=${item.id}`)}
             className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
-            <MessageSquare size={14} className="shrink-0 text-zinc-400 dark:text-zinc-600" />
+            <MessageSquare
+              size={14}
+              className="shrink-0 text-zinc-400 dark:text-zinc-600"
+            />
             {isOpen && (
-              <span className="truncate">{item.title || "Untitled"}</span>
+              <span className="truncate">{item.title || 'Untitled'}</span>
             )}
           </button>
         ))}
@@ -76,14 +89,17 @@ export default function Sidebar() {
         {isOpen ? (
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
-              <User size={13} className="text-indigo-600 dark:text-indigo-400" />
+              <User
+                size={13}
+                className="text-indigo-600 dark:text-indigo-400"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                {user?.name ?? "—"}
+                {user?.name ?? '—'}
               </p>
               <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
-                {user?.email ?? ""}
+                {user?.email ?? ''}
               </p>
             </div>
             <button

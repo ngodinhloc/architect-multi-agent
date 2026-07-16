@@ -1,4 +1,5 @@
 import logging
+
 from app.contracts.chat_interface import TicketRequest
 from app.events.contracts.event_interface import AcceptEvent
 from app.services.ticket_service import TicketService

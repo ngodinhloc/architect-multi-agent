@@ -1,11 +1,11 @@
-from typing import Optional
 import redis.asyncio as aioredis
+
 from app.configs.settings import settings
 
 
 class RedisClient:
     def __init__(self):
-        self._client: Optional[aioredis.Redis] = None
+        self._client: aioredis.Redis | None = None
 
     def get(self) -> aioredis.Redis:
         if self._client is None:

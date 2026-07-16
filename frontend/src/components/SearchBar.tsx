@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useState, FormEvent } from "react";
-import { Send } from "lucide-react";
+import { useState, FormEvent } from 'react';
+import { Send } from 'lucide-react';
 
 interface SearchBarProps {
   onSearch: (message: string) => void;
@@ -9,14 +9,18 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-export default function SearchBar({ onSearch, loading, placeholder = "Describe a software requirement…" }: SearchBarProps) {
-  const [value, setValue] = useState("");
+export default function SearchBar({
+  onSearch,
+  loading,
+  placeholder = 'Describe a software requirement…',
+}: SearchBarProps) {
+  const [value, setValue] = useState('');
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (value.trim()) {
       onSearch(value.trim());
-      setValue("");
+      setValue('');
     }
   }
 
@@ -36,7 +40,7 @@ export default function SearchBar({ onSearch, loading, placeholder = "Describe a
         className="flex items-center gap-2 rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:opacity-50"
       >
         <Send size={15} />
-        {loading ? "Thinking…" : "Send"}
+        {loading ? 'Thinking…' : 'Send'}
       </button>
     </form>
   );

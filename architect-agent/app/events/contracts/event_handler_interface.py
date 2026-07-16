@@ -1,4 +1,5 @@
 from typing import Protocol
+
 from app.events.contracts.event_interface import ChatEvent
 
 

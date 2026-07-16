@@ -10,7 +10,9 @@ const SCHEMA = 'tickets';
   imports: [
     TypeOrmModule.forRootAsync({
       useFactory: async () => {
-        const client = new Client({ connectionString: process.env.DATABASE_URL });
+        const client = new Client({
+          connectionString: process.env.DATABASE_URL,
+        });
         await client.connect();
         await client.query(`CREATE SCHEMA IF NOT EXISTS "${SCHEMA}"`);
         await client.end();

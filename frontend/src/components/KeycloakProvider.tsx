@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import Keycloak from "keycloak-js";
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import Keycloak from 'keycloak-js';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 
-const KC_URL = process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? "http://localhost:8080";
-const KC_REALM = process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? "architect";
-const KC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "frontend";
+const KC_URL = process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080';
+const KC_REALM = process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'architect';
+const KC_CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'frontend';
 
 export interface KcUser {
   name: string;
@@ -25,7 +25,7 @@ function setTokenCookie(token: string) {
 }
 
 function clearTokenCookie() {
-  document.cookie = "kc_token=; path=/; max-age=0; SameSite=Lax";
+  document.cookie = 'kc_token=; path=/; max-age=0; SameSite=Lax';
 }
 
 export function KeycloakProvider({ children }: { children: React.ReactNode }) {
@@ -34,17 +34,21 @@ export function KeycloakProvider({ children }: { children: React.ReactNode }) {
   const kcRef = useRef<Keycloak | null>(null);
 
   useEffect(() => {
-    const kc = new Keycloak({ url: KC_URL, realm: KC_REALM, clientId: KC_CLIENT_ID });
+    const kc = new Keycloak({
+      url: KC_URL,
+      realm: KC_REALM,
+      clientId: KC_CLIENT_ID,
+    });
     kcRef.current = kc;
 
-    kc.init({ onLoad: "login-required", pkceMethod: "S256" })
+    kc.init({ onLoad: 'login-required', pkceMethod: 'S256' })
       .then((authenticated) => {
         if (authenticated && kc.tokenParsed && kc.token) {
           const p = kc.tokenParsed as Record<string, string>;
           setUser({
-            name: p["name"] ?? p["preferred_username"] ?? "User",
-            email: p["email"] ?? "",
-            username: p["preferred_username"] ?? "",
+            name: p['name'] ?? p['preferred_username'] ?? 'User',
+            email: p['email'] ?? '',
+            username: p['preferred_username'] ?? '',
           });
           setTokenCookie(kc.token);
         }
