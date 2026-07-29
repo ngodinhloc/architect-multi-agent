@@ -32,4 +32,4 @@ dist/
 Thumbs.db
 
 # Media
-demo_video.mov
+*.mov

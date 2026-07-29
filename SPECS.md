@@ -102,13 +102,13 @@ ChatEventInterface {
 
 ## Components
 
-### frontend (port 3000)
+### frontend 
 Next.js / React / Tailwind CSS. Sends the user's requirement to the backend REST API, then opens a WebSocket to stream live agent progress. Renders `ReplyInterface` as a plan card (solution architecture + ticket list) with "Looks good" and free-text refinement actions. Renders `FinalReplyInterface` as a confirmation card showing the persisted epic and ticket IDs.
 
-### backend (port 8000)
+### backend 
 NestJS API. Owns conversation state in PostgreSQL (`conversations` table, `messages: jsonb`) and Redis (`chat:{uuid}` key as live `ChatInterface`). Exposes REST endpoints for creating and retrieving conversations and a WebSocket gateway that polls Redis at 500 ms to push `chat-update` events. Publishes `ChatEventInterface` to RabbitMQ queue `architecture-agent.chat` (fire-and-forget) when a new message arrives.
 
-### ai-agent (port 8001)
+### ai-agent 
 FastAPI service hosting a LangGraph stateful graph. Subscribes to RabbitMQ queue `architecture-agent.chat`. For each event it runs a graph with the following nodes:
 
 - **intent_node** — classifies the user message as `plan`, `refine`, or `accept`
@@ -121,7 +121,7 @@ FastAPI service hosting a LangGraph stateful graph. Subscribes to RabbitMQ queue
 
 Each LLM node uses `ChatAnthropic.with_structured_output()` (claude-sonnet-4-6). After each node update, a thinking-log message is appended to Redis so the frontend can display live progress.
 
-### mcp-server (port 8002)
+### mcp-server 
 FastMCP + FastAPI service. Exposes two MCP tools over streamable HTTP at `POST /mcp/`. Translates each tool call into a REST request to the ticket-service.
 
 | Tool | Calls |
@@ -129,7 +129,7 @@ FastMCP + FastAPI service. Exposes two MCP tools over streamable HTTP at `POST /
 | `create_epic(epic: dict)` | `POST /api/epic/` on ticket-service |
 | `create_ticket(ticket: dict)` | `POST /api/ticket/` on ticket-service |
 
-### ticket-service (port 8003)
+### ticket-service
 NestJS CRUD service with its own PostgreSQL database. Owns the `epics` and `tickets` tables. No RabbitMQ, no Redis, no WebSocket.
 
 | Method | Path | Description |
@@ -140,10 +140,9 @@ NestJS CRUD service with its own PostgreSQL database. Owns the `epics` and `tick
 | `GET` | `/api/epic/:epicId/tickets` | Get all tickets for an epic |
 
 ### Infrastructure
-- **PostgreSQL (postgres-backend, port 5432)** — backend conversations (`architect` database)
-- **PostgreSQL (postgres-tickets, port 5433)** — ticket-service epics & tickets (`tickets` database)
+- **PostgreSQL (postgres-backend)** — backend conversations (`architect` database),  ticket-service epics & tickets (`tickets` database)
 - **Redis** — live chat state during agent processing
-- **RabbitMQ (port 5672)** — async message queue between backend and ai-agent
+- **RabbitMQ ** — async message queue between backend and ai-agent
 
 ---
 
